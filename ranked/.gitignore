@@ -1,0 +1,5 @@
+.env
+.server-support/
+backend/bin/
+backend/obj/
+backend.log

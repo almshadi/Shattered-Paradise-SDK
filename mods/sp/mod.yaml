@@ -238,6 +238,7 @@ ChromeLayout:
 	common|chrome/ingame-debug-hpf.yaml
 	common|chrome/ingame-infochat.yaml
 	sp|chrome/mainmenu.yaml
+	sp|chrome/ranked.yaml
 	common|chrome/mainmenu-prompts.yaml
 	sp|chrome/mainmenu-prerelease-notification.yaml
 	common|chrome/settings.yaml
@@ -291,6 +292,7 @@ FluentMessages:
 	sp|fluent/sp.ftl
 	sp|fluent/hotkeys.ftl
 	sp|fluent/rules.ftl
+	sp|fluent/ranked.ftl
 
 AllowUnusedFluentMessagesInExternalPackages: true
 
@@ -320,6 +322,7 @@ LoadScreen: LogoStripeLoadScreen
 	Image: sp|uibits/loadscreen.png
 
 ServerTraits:
+	RankedMatchServer
 	LobbyCommands
 	PlayerPinger
 	MasterServerPinger
@@ -414,3 +417,6 @@ WorldViewportSizes:
 
 DiscordService:
 	ApplicationId: 742369365529460747
+
+RankedSettings:
+	BackendUrl: http://localhost:8090

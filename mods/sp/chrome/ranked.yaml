@@ -1,0 +1,273 @@
+Background@RANKED_PANEL:
+	Logic: RankedLogic
+	X: (WINDOW_WIDTH - WIDTH) / 2
+	Y: (WINDOW_HEIGHT - HEIGHT) / 2
+	Width: 520
+	Height: 330
+	Children:
+		Label@TITLE:
+			X: 0
+			Y: 21
+			Width: PARENT_WIDTH
+			Height: 25
+			Text: label-ranked-panel-title
+			Align: Center
+			Font: Bold
+		Label@STATUS:
+			X: 20
+			Y: 60
+			Width: PARENT_WIDTH - 40
+			Height: 25
+			Align: Center
+			Font: Bold
+		Label@DETAIL:
+			X: 20
+			Y: 88
+			Width: PARENT_WIDTH - 40
+			Height: 60
+			Align: Center
+			VAlign: Top
+			WordWrap: true
+		Label@DEV_NAME_LABEL:
+			X: 20
+			Y: 160
+			Width: 175
+			Height: 25
+			Align: Right
+			Text: label-ranked-dev-name
+		TextField@DEV_NAME:
+			X: 205
+			Y: 160
+			Width: 160
+			Height: 25
+			MaxLength: 16
+		Label@NICKNAME_LABEL:
+			X: 20
+			Y: 160
+			Width: 175
+			Height: 25
+			Align: Right
+			Text: label-ranked-nickname
+		TextField@NICKNAME:
+			X: 205
+			Y: 160
+			Width: 160
+			Height: 25
+			MaxLength: 16
+		Label@FACTION_LABEL:
+			X: 20
+			Y: 160
+			Width: 70
+			Height: 25
+			Align: Right
+			Text: label-ranked-faction
+		DropDownButton@FACTION:
+			X: 100
+			Y: 160
+			Width: 180
+			Height: 25
+			IgnoreChildMouseOver: true
+			Children:
+				Image@FACTIONFLAG:
+					X: 5
+					Y: 5
+					Width: 30
+					Height: 15
+				Label@FACTIONNAME:
+					X: 40
+					Width: 120
+					Height: 25
+		Label@COLOR_LABEL:
+			X: 290
+			Y: 160
+			Width: 60
+			Height: 25
+			Align: Right
+			Text: label-ranked-color
+		DropDownButton@COLOR:
+			X: 360
+			Y: 160
+			Width: 80
+			Height: 25
+			IgnoreChildMouseOver: true
+			PanelAlign: Right
+			Children:
+				ColorBlock@COLORBLOCK:
+					X: 5
+					Y: 6
+					Width: PARENT_WIDTH - 35
+					Height: PARENT_HEIGHT - 12
+		Button@RENAME_BUTTON:
+			X: 100
+			Y: 195
+			Width: 180
+			Height: 25
+			Text: button-ranked-rename
+		Button@LEADERBOARD_BUTTON:
+			X: 290
+			Y: 195
+			Width: 150
+			Height: 25
+			Text: button-ranked-leaderboard
+		Label@INFO:
+			X: 20
+			Y: 235
+			Width: PARENT_WIDTH - 40
+			Height: 40
+			Align: Center
+			VAlign: Top
+			Font: Small
+			WordWrap: true
+		Button@PRIMARY_BUTTON:
+			X: 20
+			Y: PARENT_HEIGHT - 45
+			Width: 180
+			Height: 25
+			Font: Bold
+			Key: return
+		Button@SECONDARY_BUTTON:
+			X: 210
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Font: Bold
+		Button@BACK_BUTTON:
+			X: PARENT_WIDTH - 160
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Text: button-back
+			Font: Bold
+			Key: escape
+		TooltipContainer@TOOLTIP_CONTAINER:
+
+Background@RANKED_LEADERBOARD_PANEL:
+	Logic: RankedLeaderboardLogic
+	X: (WINDOW_WIDTH - WIDTH) / 2
+	Y: (WINDOW_HEIGHT - HEIGHT) / 2
+	Width: 600
+	Height: 480
+	Children:
+		Label@TITLE:
+			X: 0
+			Y: 21
+			Width: PARENT_WIDTH
+			Height: 25
+			Text: label-ranked-leaderboard-title
+			Align: Center
+			Font: Bold
+		Container@HEADERS:
+			X: 20
+			Y: 55
+			Width: PARENT_WIDTH - 40
+			Height: 25
+			Children:
+				Label@RANK:
+					X: 5
+					Width: 50
+					Height: 25
+					Text: label-ranked-col-rank
+					Font: Bold
+				Label@NAME:
+					X: 60
+					Width: 200
+					Height: 25
+					Text: label-ranked-col-player
+					Font: Bold
+				Label@RATING:
+					X: 265
+					Width: 70
+					Height: 25
+					Text: label-ranked-col-rating
+					Align: Right
+					Font: Bold
+				Label@WINS:
+					X: 345
+					Width: 50
+					Height: 25
+					Text: label-ranked-col-wins
+					Align: Right
+					Font: Bold
+				Label@LOSSES:
+					X: 400
+					Width: 50
+					Height: 25
+					Text: label-ranked-col-losses
+					Align: Right
+					Font: Bold
+				Label@WINRATE:
+					X: 455
+					Width: 70
+					Height: 25
+					Text: label-ranked-col-winrate
+					Align: Right
+					Font: Bold
+		ScrollPanel@LIST:
+			X: 20
+			Y: 82
+			Width: PARENT_WIDTH - 40
+			Height: PARENT_HEIGHT - 175
+			TopBottomSpacing: 2
+			Children:
+				ScrollItem@TEMPLATE:
+					X: 2
+					Width: PARENT_WIDTH - 27
+					Height: 25
+					Visible: false
+					Children:
+						Label@RANK:
+							X: 3
+							Width: 50
+							Height: 25
+						Label@NAME:
+							X: 58
+							Width: 200
+							Height: 25
+						Label@RATING:
+							X: 263
+							Width: 70
+							Height: 25
+							Align: Right
+						Label@WINS:
+							X: 343
+							Width: 50
+							Height: 25
+							Align: Right
+						Label@LOSSES:
+							X: 398
+							Width: 50
+							Height: 25
+							Align: Right
+						Label@WINRATE:
+							X: 453
+							Width: 70
+							Height: 25
+							Align: Right
+		Label@STATUS:
+			X: 20
+			Y: 82
+			Width: PARENT_WIDTH - 40
+			Height: PARENT_HEIGHT - 175
+			Align: Center
+		Label@ME:
+			X: 20
+			Y: PARENT_HEIGHT - 85
+			Width: PARENT_WIDTH - 40
+			Height: 25
+			Align: Center
+			Font: Bold
+		Button@REFRESH_BUTTON:
+			X: 20
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Text: button-ranked-refresh
+			Font: Bold
+		Button@BACK_BUTTON:
+			X: PARENT_WIDTH - 160
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Text: button-back
+			Font: Bold
+			Key: escape
