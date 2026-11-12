@@ -28,6 +28,7 @@ foreach (var envFile in new[] { ".env", "../.env" })
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<RankedOptions>(builder.Configuration.GetSection("Ranked"));
+builder.Services.Configure<QueueOptions>(builder.Configuration.GetSection("Ranked:Queue"));
 builder.Services.AddDbContext<RankedDb>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<MatchmakingLock>();

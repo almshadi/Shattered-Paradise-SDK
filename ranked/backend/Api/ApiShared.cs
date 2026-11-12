@@ -29,4 +29,4 @@ public static class ApiShared
 }
 
 public record NicknameRequest(string? Nickname);
-public record QueueRequest(string? Faction, string? Color);
+public record QueueRequest(string? Faction, string? Color, List<string?>? Vetoes = null);

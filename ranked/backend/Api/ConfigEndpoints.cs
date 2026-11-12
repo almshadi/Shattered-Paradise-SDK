@@ -8,7 +8,7 @@ public static class ConfigEndpoints
 {
 	public static void Map(WebApplication app)
 	{
-		app.MapGet("/config", (HttpContext ctx, ModVersionReader versions, IOptions<RankedOptions> opt) =>
+		app.MapGet("/config", (HttpContext ctx, ModVersionReader versions, IOptions<RankedOptions> opt, IOptions<QueueOptions> queueOpt) =>
 		{
 			var required = versions.Required;
 			return Results.Ok(new
@@ -19,7 +19,9 @@ public static class ConfigEndpoints
 				googleConfigured = !string.IsNullOrEmpty(opt.Value.Auth.GoogleClientId),
 				requiredClientVersion = required,
 				clientDownloadUrl = opt.Value.ClientDownloadUrl,
-				versionOk = ClientVersion.IsOk(required, ClientVersion.Of(ctx))
+				versionOk = ClientVersion.IsOk(required, ClientVersion.Of(ctx)),
+				mapPool = opt.Value.GameServers.MapPool,
+				maxMapVetoes = queueOpt.Value.MaxMapVetoes
 			});
 		});
 	}
