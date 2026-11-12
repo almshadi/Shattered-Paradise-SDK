@@ -5,6 +5,7 @@ using Ranked.Backend.Auth;
 using Ranked.Backend.Data;
 using Ranked.Backend.Matchmaking;
 using Ranked.Backend.Ratings;
+using Ranked.Backend.Replays;
 
 // Load secrets from ranked/.env (KEY=VALUE lines) for local development. Real env vars win.
 foreach (var envFile in new[] { ".env", "../.env" })
@@ -33,6 +34,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<MatchmakingLock>();
 builder.Services.AddSingleton<ModVersionReader>();
 builder.Services.AddSingleton<GameServerManager>();
+builder.Services.AddReplays(builder.Configuration);
 builder.Services.AddSingleton<MapPicker>();
 builder.Services.AddSingleton<RatingService>();
 builder.Services.AddSingleton<Ranked.Backend.Ratings.ISeasonService, Ranked.Backend.Ratings.NoSeasonService>();

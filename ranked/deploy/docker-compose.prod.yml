@@ -21,6 +21,10 @@ services:
     # and nothing is published behind ufw's back. The API itself only listens on 127.0.0.1 (nginx proxies it).
     network_mode: host
     env_file: .env
+    environment:
+      Ranked__Replays__Directory: /app/replays
+    volumes:
+      - replays:/app/replays   # recorded game replays (deleted after Ranked__Replays__RetentionDays, default 30)
     depends_on:
       - db
     mem_limit: 900m   # backend + up to 3 game servers; protects the other sites on this machine
@@ -28,3 +32,4 @@ services:
 
 volumes:
   db:
+  replays:

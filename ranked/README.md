@@ -125,3 +125,10 @@ ranked/release.sh ranked-0.1.0             # same + commit "Release ...", tag, p
 - Output: `dist/ShatteredParadise-<version>-win64.zip` with a `ShatteredParadise-<version>/` folder: the game tree plus `play.cmd` and `README.txt` from `ranked/launcher/` (the player needs the .NET 6 Desktop Runtime; `play.cmd` checks for it).
 - With the GitHub CLI (`gh`) installed the release is created automatically; otherwise the script prints the manual upload steps (https://github.com/almshadi/Shattered-Paradise-sdk/releases/new).
 - Both players' clients and the game servers must run the same version.
+
+## Match history & replays
+
+- `GET /matches/history?limit=20&before=<iso>` (auth): the player's matches, newest first (`limit` 1–100, page with `before` = `createdAt` of the last entry). Each entry: `id, createdAt, startedAt, endedAt, durationSeconds, status, reason, rated, mapUid, queueType, me {faction, result, mmrBefore, mmrAfter, placement}, opponents [{name, faction, result, team}], hasReplay`. Opponent factions are `null` until the game started. `reason` is the raw status reason (the client maps it to text).
+- `GET /matches/{id}/replay`: the recorded `.orarep` (e.g. `2026-11-13_Alice-vs-Bob.orarep`), 404 if there is none. `GET /matches/{id}` has `hasReplay`.
+- Game servers run with `Server.RecordReplays=True` and their own support dir `ranked/.server-support/<matchId>`; the engine writes `<supportDir>/Replays/sp/<mod version>/sp-Server-<timestamp>.orarep` once a game actually starts. When the server process exits, `GameServerManager` moves the newest `.orarep` into the replay store as `<matchId>.orarep`, sets `Match.ReplayFile` and deletes the support dir.
+- Replay store: `Ranked:Replays:Directory` (default `ranked/.replays`; production: docker volume `replays` at `/app/replays`). Files older than `Ranked:Replays:RetentionDays` (default 30, `0` = keep forever) are deleted daily and their matches lose `hasReplay`.
