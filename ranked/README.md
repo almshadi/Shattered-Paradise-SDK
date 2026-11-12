@@ -33,7 +33,7 @@ The game servers need the .NET 6 runtime (`dotnet --list-runtimes`).
 | `Ranked__RequiredClientVersion` | empty (default) / e.g. `ranked-0.1.0` | Clients must send exactly this version (`X-Client-Version`) to queue; others get HTTP 409 `version_mismatch`. Empty = automatic: the `Version` from `mods/sp/mod.yaml` of the SDK checkout the game servers run from (re-read when the file changes). Set the mod version with `make version VERSION=...` |
 | `Ranked__ClientDownloadUrl` | URL (default: GitHub latest release) | Where outdated clients are sent to download the matching build (returned in `/config` and in `version_mismatch` errors) |
 
-Restart the backend after changing settings. Ratings use Elo (K=32) for now; the rating calculation is a single function (`RatingSystem` in `Matchmaker.cs`), so swapping in Glicko-2 later won't affect the rest of the code.
+Restart the backend after changing settings. Ratings use Glicko-2, see [Rating system](#rating-system).
 
 ## Google sign-in setup
 
@@ -125,3 +125,21 @@ ranked/release.sh ranked-0.1.0             # same + commit "Release ...", tag, p
 - Output: `dist/ShatteredParadise-<version>-win64.zip` with a `ShatteredParadise-<version>/` folder: the game tree plus `play.cmd` and `README.txt` from `ranked/launcher/` (the player needs the .NET 6 Desktop Runtime; `play.cmd` checks for it).
 - With the GitHub CLI (`gh`) installed the release is created automatically; otherwise the script prints the manual upload steps (https://github.com/almshadi/Shattered-Paradise-sdk/releases/new).
 - Both players' clients and the game servers must run the same version.
+
+## Rating system
+
+**Glicko-2** (Glickman 2012), implemented in `ranked/backend/Rating/Glicko2.cs`; one match = one rating period. Each player has a rating (`mmr`, starts at 1500), a rating deviation (`deviation`, uncertainty, starts at 350) and a volatility (0.06). New players' ratings move a lot; as the deviation shrinks, changes get smaller. Inactivity: before each rated game the deviation grows with the days since the player's last rated game (`phi* = sqrt(phi² + σ²·days/7)`, capped at 350), so returning players re-calibrate faster. With `RatingUpdates=false` games/wins/losses are still counted, but rating values never change.
+
+**Placement:** a player appears on `/leaderboard` once they have played `PlacementGames` (default 5) games in the current season and are not banned. `/me` returns `placed`, `placementGamesLeft` and `deviation`; the leaderboard's `me` row is present during placement too (`rank: null, placed: false`).
+
+**Seasons** (`Rating/SeasonService.cs`, started/ended by admins): starting a new season archives the final standings of the active one (placed, non-banned players by rating → `SeasonStandings`), ends it, and soft-resets everyone: `mmr = 1500 + (mmr − 1500) · 0.5`, `deviation = max(deviation, 200)`, games/wins/losses = 0 (everyone plays placements again). `GET /seasons` lists all seasons; `GET /leaderboard?season={id}` returns the archived standings of a past season (default: current season, `season` field in the response).
+
+| Setting (`Ranked__Rating__*`) | Default | Effect |
+|---|---|---|
+| `Tau` | `0.5` | Glicko-2 system constant (how fast volatility changes) |
+| `PlacementGames` | `5` | Games before a player is listed on the leaderboard |
+| `InitialDeviation` / `InitialVolatility` | `350` / `0.06` | Starting values for new players (start rating: `Ranked__Matchmaking__InitialRating`) |
+| `InactivityPeriodDays` | `7` | Days of inactivity that count as one rating period of deviation growth |
+| `SoftResetFactor` / `SoftResetMinDeviation` | `0.5` / `200` | Season soft reset |
+
+Tests: `cd ranked/backend.Tests && dotnet test` (reproduces the example from Glickman's paper).

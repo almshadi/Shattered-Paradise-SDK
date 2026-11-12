@@ -28,6 +28,7 @@ foreach (var envFile in new[] { ".env", "../.env" })
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<RankedOptions>(builder.Configuration.GetSection("Ranked"));
+builder.Services.Configure<RatingOptions>(builder.Configuration.GetSection("Ranked:Rating"));
 builder.Services.AddDbContext<RankedDb>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<MatchmakingLock>();
@@ -35,7 +36,7 @@ builder.Services.AddSingleton<ModVersionReader>();
 builder.Services.AddSingleton<GameServerManager>();
 builder.Services.AddSingleton<MapPicker>();
 builder.Services.AddSingleton<RatingService>();
-builder.Services.AddSingleton<Ranked.Backend.Ratings.ISeasonService, Ranked.Backend.Ratings.NoSeasonService>();
+builder.Services.AddSingleton<Ranked.Backend.Ratings.ISeasonService, Ranked.Backend.Ratings.SeasonService>();
 builder.Services.AddSingleton<Ranked.Backend.Notifications.IRankedNotifier, Ranked.Backend.Notifications.NullRankedNotifier>();
 builder.Services.AddSingleton<Matchmaker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Matchmaker>());

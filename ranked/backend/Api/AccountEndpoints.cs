@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Ranked.Backend.Auth;
 using Ranked.Backend.Data;
+using Ranked.Backend.Ratings;
 using static Ranked.Backend.Api.ApiShared;
 
 namespace Ranked.Backend.Api;
@@ -10,17 +12,17 @@ public static class AccountEndpoints
 {
 	public static void Map(WebApplication app)
 	{
-		app.MapGet("/me", async (HttpContext ctx, RankedDb db) =>
+		app.MapGet("/me", async (HttpContext ctx, RankedDb db, IOptions<RatingOptions> rating) =>
 		{
 			var user = await CurrentUser.GetAsync(ctx, db);
 			if (user == null)
 				return Results.Unauthorized();
 
 			await db.SaveChangesAsync();
-			return Results.Ok(UserDto(user));
+			return Results.Ok(UserDto(user, rating.Value.PlacementGames));
 		});
 
-		app.MapPut("/me/nickname", async (HttpContext ctx, NicknameRequest req, RankedDb db) =>
+		app.MapPut("/me/nickname", async (HttpContext ctx, NicknameRequest req, RankedDb db, IOptions<RatingOptions> rating) =>
 		{
 			var user = await CurrentUser.GetAsync(ctx, db);
 			if (user == null)
@@ -37,7 +39,7 @@ public static class AccountEndpoints
 			user.DisplayName = nick;
 			user.NicknameKey = key;
 			await db.SaveChangesAsync();
-			return Results.Ok(UserDto(user));
+			return Results.Ok(UserDto(user, rating.Value.PlacementGames));
 		});
 
 		// GDPR: lets a player remove their account and all their data.

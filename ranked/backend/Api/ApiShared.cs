@@ -15,7 +15,8 @@ public static class ApiShared
 			.OrderByDescending(m => m.CreatedAt)
 			.FirstOrDefaultAsync();
 
-	public static object UserDto(User u) => new
+	// placementGames: RatingOptions.PlacementGames (pass the configured value; the default matches the default option).
+	public static object UserDto(User u, int placementGames = Ratings.RatingOptions.DefaultPlacementGames) => new
 	{
 		id = u.Id,
 		name = u.DisplayName,
@@ -24,7 +25,10 @@ public static class ApiShared
 		mmr = u.Rating?.Mmr,
 		games = u.Rating?.Games,
 		wins = u.Rating?.Wins,
-		losses = u.Rating?.Losses
+		losses = u.Rating?.Losses,
+		deviation = u.Rating?.Deviation,
+		placed = Ratings.Placement.IsPlaced(u.Rating, placementGames),
+		placementGamesLeft = Ratings.Placement.GamesLeft(u.Rating, placementGames)
 	};
 }
 

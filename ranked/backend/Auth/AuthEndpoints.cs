@@ -50,6 +50,7 @@ public static class AuthEndpoints
 	public static void Map(WebApplication app)
 	{
 		var g = app.MapGroup("/auth");
+		var rating = app.Services.GetRequiredService<IOptions<Ratings.RatingOptions>>().Value;
 
 		// 1) Game client starts a login. Returns the URL to open in the browser and a poll secret.
 		g.MapPost("/login", async (RankedDb db, IOptions<RankedOptions> opt) =>
@@ -155,7 +156,7 @@ public static class AuthEndpoints
 				// Only Google's stable account id is kept. The player picks a public nickname afterwards.
 				user = new User { GoogleSub = payload.Subject };
 				db.Users.Add(user);
-				db.Ratings.Add(new Rating { UserId = user.Id, Mmr = o.Matchmaking.InitialRating });
+				db.Ratings.Add(new Rating { UserId = user.Id, Mmr = o.Matchmaking.InitialRating, Deviation = rating.InitialDeviation, Volatility = rating.InitialVolatility });
 			}
 
 			user.Email = payload.Email;
@@ -210,7 +211,7 @@ public static class AuthEndpoints
 			{
 				user = new User { DisplayName = name, NicknameKey = key, IsDevUser = true };
 				db.Users.Add(user);
-				db.Ratings.Add(new Rating { UserId = user.Id, Mmr = o.Matchmaking.InitialRating });
+				db.Ratings.Add(new Rating { UserId = user.Id, Mmr = o.Matchmaking.InitialRating, Deviation = rating.InitialDeviation, Volatility = rating.InitialVolatility });
 			}
 
 			var token = await IssueSession(db, user, o);
