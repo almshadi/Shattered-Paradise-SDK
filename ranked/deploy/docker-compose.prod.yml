@@ -1,0 +1,30 @@
+# Production stack on the server (/opt/sp-ranked). Secrets live in /opt/sp-ranked/.env (not in git).
+name: sp-ranked
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ranked
+      POSTGRES_USER: ranked
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5443:5432"   # only reachable from the server itself
+    volumes:
+      - db:/var/lib/postgresql/data
+    mem_limit: 256m
+    restart: unless-stopped
+
+  backend:
+    image: sp-ranked:${SP_RANKED_VERSION:?set SP_RANKED_VERSION in .env}
+    # Host networking: game server ports are opened by the host firewall (ufw) like any other service,
+    # and nothing is published behind ufw's back. The API itself only listens on 127.0.0.1 (nginx proxies it).
+    network_mode: host
+    env_file: .env
+    depends_on:
+      - db
+    mem_limit: 900m   # backend + up to 3 game servers; protects the other sites on this machine
+    restart: unless-stopped
+
+volumes:
+  db:

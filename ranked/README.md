@@ -70,18 +70,38 @@ Login flow: the game asks the backend to start a login → opens the browser →
 
 Timeouts: the queue drops a player who stops polling (30s); a match is cancelled if the game hasn't started within 5 min; games longer than 3 h are voided.
 
-## Hosting (for testing with someone else)
+## Hosting (live: ranked.tabletstrats.com)
 
-Both players must reach the backend (HTTPS) and the game server ports (`12340-12360/tcp`). Easiest is a small Linux VPS:
-clone the fork, `make`, install the .NET 6 runtime + Docker, run `ranked/run-backend.sh` behind a reverse proxy with TLS, and set:
+The live stack runs on the tabletstrats.com server, next to other sites, isolated in its own Docker project:
 
+| Piece | Where |
+|---|---|
+| Compose project | `/opt/sp-ranked` (`docker-compose.yml` = `ranked/deploy/docker-compose.prod.yml`, secrets in `.env`, chmod 600) |
+| Backend + game servers | container `sp-ranked-backend-1`, host network, API on `127.0.0.1:8090`, `mem_limit 900m` |
+| Database | container `sp-ranked-db-1`, Postgres 16, `127.0.0.1:5443` only, `mem_limit 256m`, volume `sp-ranked_db` |
+| Reverse proxy / TLS | nginx site `/etc/nginx/sites-available/sp-ranked` (certbot-managed Let's Encrypt cert) |
+| Firewall | `ufw allow 12340:12342/tcp` (game servers; max 3 concurrent matches on this small box) |
+
+**Deploy a new build** (after `make` / a release, from this checkout):
+
+```bash
+ranked/deploy/deploy.sh          # builds image sp-ranked:<mod version>, uploads via ssh, restarts
 ```
-Ranked__PublicBaseUrl=https://ranked.example.com
-Ranked__GameServers__PublicHost=<vps public ip or hostname>
-Ranked__Auth__DevLogin=false
-```
 
-Then set `RankedSettings: BackendUrl` in `mods/sp/mod.yaml` to the public URL and build the client release.
+The image bundles the backend, the .NET 6 runtime and the game files; the backend requires exactly the image's mod version.
+
+**First-time setup on a new server** (what was done for tabletstrats.com):
+1. DNS A record `ranked.<domain>` → server IP.
+2. `apt-get install docker.io docker-compose-v2`, `mkdir /opt/sp-ranked`, create `.env` from `ranked/deploy/env.prod.example` (random `POSTGRES_PASSWORD`/`ServerSecret`, Google credentials).
+3. `ranked/deploy/deploy.sh`.
+4. nginx: copy `ranked/deploy/nginx-ranked.conf` to `sites-available/sp-ranked`, symlink to `sites-enabled`, `nginx -t && systemctl reload nginx`, then `certbot --nginx -d ranked.<domain> --redirect`.
+5. `ufw allow 12340:12342/tcp`.
+6. Google Cloud: add `https://ranked.<domain>/auth/google/callback` as redirect URI.
+7. `RankedSettings: BackendUrl` in `mods/sp/mod.yaml` → `https://ranked.<domain>`, then release a client build.
+
+**Rollback / removal:** `cd /opt/sp-ranked && docker compose down` (add `-v` to delete the database), remove `/etc/nginx/sites-enabled/sp-ranked` + reload nginx, `ufw delete allow 12340:12342/tcp`.
+
+**Local development** against a backend on this machine: start the game with `SP_RANKED_BACKEND_URL=http://localhost:8090`.
 
 ## Known limitations (prototype)
 
