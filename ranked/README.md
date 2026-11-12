@@ -125,3 +125,30 @@ ranked/release.sh ranked-0.1.0             # same + commit "Release ...", tag, p
 - Output: `dist/ShatteredParadise-<version>-win64.zip` with a `ShatteredParadise-<version>/` folder: the game tree plus `play.cmd` and `README.txt` from `ranked/launcher/` (the player needs the .NET 6 Desktop Runtime; `play.cmd` checks for it).
 - With the GitHub CLI (`gh`) installed the release is created automatically; otherwise the script prints the manual upload steps (https://github.com/almshadi/Shattered-Paradise-sdk/releases/new).
 - Both players' clients and the game servers must run the same version.
+
+## Admin
+
+A user is an admin if `Users.IsAdmin` is set **or** their id / Google email is listed in the `Ranked:Admin` config
+(comma-separated, emails case-insensitive). Use the config to bootstrap the first admin without touching the database:
+
+```
+Ranked__Admin__AdminEmails=you@gmail.com        # in ranked/.env or the server .env
+Ranked__Admin__AdminUserIds=<user guid>,<guid>  # e.g. for dev-login users (no email)
+```
+
+That admin can then grant/revoke `IsAdmin` for others (`POST /admin/users/{id}/admin`). Config admins stay admins regardless of the flag.
+
+All endpoints take `Authorization: Bearer <token>`; non-admins get `403 {"error":"forbidden"}`. Every mutating call is recorded in `AdminActions`.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /admin/me` | `{isAdmin, name}` for any signed-in user |
+| `GET /admin/users?search=&limit=50` | search by name / email / Discord id / user id |
+| `POST /admin/users/{id}/ban` `{"minutes":int\|null,"reason":""}` | `null` = permanent (until 9999-12-31); also removes them from the queue |
+| `POST /admin/users/{id}/unban` | |
+| `POST /admin/users/{id}/rating` `{"mmr":0..5000,"deviation":30..350\|null,"reason":""}` | set rating |
+| `POST /admin/users/{id}/admin` `{"isAdmin":bool}` | grant / revoke admin (not on yourself) |
+| `GET /admin/matches?status=&userId=&limit=50` | status = a match status or `active` |
+| `POST /admin/matches/{id}/void` `{"reason":""}` | active match: closed as Void; completed match: rating/stat changes reverted, then Void |
+| `GET /admin/seasons`, `POST /admin/seasons/start` `{"name":""}`, `POST /admin/seasons/end` | season control (501 while seasons are not implemented) |
+| `GET /admin/actions?limit=100` | audit log, newest first |

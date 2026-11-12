@@ -28,6 +28,7 @@ foreach (var envFile in new[] { ".env", "../.env" })
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<RankedOptions>(builder.Configuration.GetSection("Ranked"));
+builder.Services.Configure<Ranked.Backend.Admin.AdminOptions>(builder.Configuration.GetSection("Ranked:Admin"));
 builder.Services.AddDbContext<RankedDb>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<MatchmakingLock>();
@@ -83,5 +84,6 @@ MatchEndpoints.Map(app);
 LeaderboardEndpoints.Map(app);
 ConfigEndpoints.Map(app);
 ServerEndpoints.Map(app);
+AdminEndpoints.Map(app);
 
 app.Run();
