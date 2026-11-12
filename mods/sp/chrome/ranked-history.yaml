@@ -1,0 +1,5 @@
+# Placeholder for the ranked match history panel (filled in by a later change).
+Container@RANKED_HISTORY_PLACEHOLDER:
+	Width: 0
+	Height: 0
+	Visible: false

@@ -105,7 +105,8 @@ The image bundles the backend, the .NET 6 runtime and the game files; the backen
 
 ## Known limitations (prototype)
 
-- Schema is created with `EnsureCreated`; on schema changes drop the DB volume (`docker compose down -v`). Switch to EF migrations before keeping real data.
+- Schema is managed with EF Core migrations (`backend/Data/Migrations`), applied automatically on startup. Databases created by the old `EnsureCreated` prototype are baselined at `0001_Initial` first (`Data/DatabaseMigrator.cs`).
+  Schema change: edit `Data/RankedDb.cs`, then from `backend/` run `dotnet ef migrations add <Name> -o Data/Migrations` (tool: `dotnet tool install --global dotnet-ef --version 8.0.10`); `dotnet ef migrations script <From> <To>` shows the SQL.
 - One backend instance (in-process lock). Game servers run on the backend host.
 - Reading the server's win/loss record uses reflection on `Server.gameInfo` (private). If the engine is updated, check that `RankedMatchServer` still works.
 - Map hacks / client-side cheats are not addressed.

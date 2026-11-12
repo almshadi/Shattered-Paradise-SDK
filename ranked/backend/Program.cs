@@ -4,6 +4,7 @@ using Ranked.Backend.Api;
 using Ranked.Backend.Auth;
 using Ranked.Backend.Data;
 using Ranked.Backend.Matchmaking;
+using Ranked.Backend.Ratings;
 
 // Load secrets from ranked/.env (KEY=VALUE lines) for local development. Real env vars win.
 foreach (var envFile in new[] { ".env", "../.env" })
@@ -32,6 +33,10 @@ builder.Services.AddHttpClient();
 builder.Services.AddSingleton<MatchmakingLock>();
 builder.Services.AddSingleton<ModVersionReader>();
 builder.Services.AddSingleton<GameServerManager>();
+builder.Services.AddSingleton<MapPicker>();
+builder.Services.AddSingleton<RatingService>();
+builder.Services.AddSingleton<Ranked.Backend.Ratings.ISeasonService, Ranked.Backend.Ratings.NoSeasonService>();
+builder.Services.AddSingleton<Ranked.Backend.Notifications.IRankedNotifier, Ranked.Backend.Notifications.NullRankedNotifier>();
 builder.Services.AddSingleton<Matchmaker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Matchmaker>());
 
@@ -51,7 +56,7 @@ if (string.IsNullOrEmpty(requiredVersion))
 else
 	app.Logger.LogInformation("Required client version: {Version} (from {Source})", requiredVersion, versions.Source);
 
-// Prototype: create the schema on startup. Switch to EF migrations before real users depend on the data.
+// Apply EF migrations on startup (baselines databases that were created by the old EnsureCreated prototype).
 using (var scope = app.Services.CreateScope())
 {
 	var db = scope.ServiceProvider.GetRequiredService<RankedDb>();
@@ -59,7 +64,7 @@ using (var scope = app.Services.CreateScope())
 	{
 		try
 		{
-			db.Database.EnsureCreated();
+			DatabaseMigrator.Migrate(db, app.Logger);
 			break;
 		}
 		catch (Exception) when (attempt < 10)
@@ -72,7 +77,11 @@ using (var scope = app.Services.CreateScope())
 
 app.MapGet("/", () => Results.Text("Shattered Paradise ranked backend"));
 AuthEndpoints.Map(app);
-ApiEndpoints.Map(app);
+AccountEndpoints.Map(app);
+QueueEndpoints.Map(app);
+MatchEndpoints.Map(app);
+LeaderboardEndpoints.Map(app);
+ConfigEndpoints.Map(app);
 ServerEndpoints.Map(app);
 
 app.Run();

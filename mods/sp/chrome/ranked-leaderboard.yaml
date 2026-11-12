@@ -1,0 +1,130 @@
+Background@RANKED_LEADERBOARD_PANEL:
+	Logic: RankedLeaderboardLogic
+	X: (WINDOW_WIDTH - WIDTH) / 2
+	Y: (WINDOW_HEIGHT - HEIGHT) / 2
+	Width: 600
+	Height: 480
+	Children:
+		Label@TITLE:
+			X: 0
+			Y: 21
+			Width: PARENT_WIDTH
+			Height: 25
+			Text: label-ranked-leaderboard-title
+			Align: Center
+			Font: Bold
+		Container@HEADERS:
+			X: 20
+			Y: 55
+			Width: PARENT_WIDTH - 40
+			Height: 25
+			Children:
+				Label@RANK:
+					X: 5
+					Width: 50
+					Height: 25
+					Text: label-ranked-col-rank
+					Font: Bold
+				Label@NAME:
+					X: 60
+					Width: 200
+					Height: 25
+					Text: label-ranked-col-player
+					Font: Bold
+				Label@RATING:
+					X: 265
+					Width: 70
+					Height: 25
+					Text: label-ranked-col-rating
+					Align: Right
+					Font: Bold
+				Label@WINS:
+					X: 345
+					Width: 50
+					Height: 25
+					Text: label-ranked-col-wins
+					Align: Right
+					Font: Bold
+				Label@LOSSES:
+					X: 400
+					Width: 50
+					Height: 25
+					Text: label-ranked-col-losses
+					Align: Right
+					Font: Bold
+				Label@WINRATE:
+					X: 455
+					Width: 70
+					Height: 25
+					Text: label-ranked-col-winrate
+					Align: Right
+					Font: Bold
+		ScrollPanel@LIST:
+			X: 20
+			Y: 82
+			Width: PARENT_WIDTH - 40
+			Height: PARENT_HEIGHT - 175
+			TopBottomSpacing: 2
+			Children:
+				ScrollItem@TEMPLATE:
+					X: 2
+					Width: PARENT_WIDTH - 27
+					Height: 25
+					Visible: false
+					Children:
+						Label@RANK:
+							X: 3
+							Width: 50
+							Height: 25
+						Label@NAME:
+							X: 58
+							Width: 200
+							Height: 25
+						Label@RATING:
+							X: 263
+							Width: 70
+							Height: 25
+							Align: Right
+						Label@WINS:
+							X: 343
+							Width: 50
+							Height: 25
+							Align: Right
+						Label@LOSSES:
+							X: 398
+							Width: 50
+							Height: 25
+							Align: Right
+						Label@WINRATE:
+							X: 453
+							Width: 70
+							Height: 25
+							Align: Right
+		Label@STATUS:
+			X: 20
+			Y: 82
+			Width: PARENT_WIDTH - 40
+			Height: PARENT_HEIGHT - 175
+			Align: Center
+		Label@ME:
+			X: 20
+			Y: PARENT_HEIGHT - 85
+			Width: PARENT_WIDTH - 40
+			Height: 25
+			Align: Center
+			Font: Bold
+		Button@REFRESH_BUTTON:
+			X: 20
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Text: button-ranked-refresh
+			Font: Bold
+		Button@BACK_BUTTON:
+			X: PARENT_WIDTH - 160
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Text: button-back
+			Font: Bold
+			Key: escape

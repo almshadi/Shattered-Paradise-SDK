@@ -239,6 +239,8 @@ ChromeLayout:
 	common|chrome/ingame-infochat.yaml
 	sp|chrome/mainmenu.yaml
 	sp|chrome/ranked.yaml
+	sp|chrome/ranked-leaderboard.yaml
+	sp|chrome/ranked-history.yaml
 	common|chrome/mainmenu-prompts.yaml
 	sp|chrome/mainmenu-prerelease-notification.yaml
 	common|chrome/settings.yaml
@@ -293,6 +295,8 @@ FluentMessages:
 	sp|fluent/hotkeys.ftl
 	sp|fluent/rules.ftl
 	sp|fluent/ranked.ftl
+	sp|fluent/ranked-leaderboard.ftl
+	sp|fluent/ranked-history.ftl
 
 AllowUnusedFluentMessagesInExternalPackages: true
 

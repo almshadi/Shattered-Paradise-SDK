@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Ranked.Backend.Auth;
 using Ranked.Backend.Data;
+using Ranked.Backend.Ratings;
 
 namespace Ranked.Backend.Matchmaking;
 
@@ -16,30 +17,23 @@ public static class MatchStates
 	public static readonly MatchStatus[] Active = { MatchStatus.Starting, MatchStatus.WaitingForPlayers, MatchStatus.InProgress };
 }
 
-// Elo for now. Kept behind one method so Glicko-2 can replace it later without touching callers.
-public static class RatingSystem
-{
-	public static (double Winner, double Loser) Elo(double winner, double loser, double k)
-	{
-		var expectedWin = 1.0 / (1.0 + Math.Pow(10, (loser - winner) / 400.0));
-		var delta = k * (1 - expectedWin);
-		return (winner + delta, loser - delta);
-	}
-}
-
 public class Matchmaker : BackgroundService
 {
 	readonly IServiceScopeFactory scopes;
 	readonly GameServerManager servers;
+	readonly MapPicker maps;
+	readonly RatingService ratingService;
 	readonly MatchmakingLock gate;
 	readonly RankedOptions options;
 	readonly ILogger<Matchmaker> log;
 
-	public Matchmaker(IServiceScopeFactory scopes, GameServerManager servers, MatchmakingLock gate,
-		IOptions<RankedOptions> options, ILogger<Matchmaker> log)
+	public Matchmaker(IServiceScopeFactory scopes, GameServerManager servers, MapPicker maps, RatingService ratingService,
+		MatchmakingLock gate, IOptions<RankedOptions> options, ILogger<Matchmaker> log)
 	{
 		this.scopes = scopes;
 		this.servers = servers;
+		this.maps = maps;
+		this.ratingService = ratingService;
 		this.gate = gate;
 		this.options = options.Value;
 		this.log = log;
@@ -154,7 +148,7 @@ public class Matchmaker : BackgroundService
 			Status = MatchStatus.Starting,
 			MatchmakingMode = options.Matchmaking.Mode,
 			Rated = options.Matchmaking.RatingUpdates,
-			MapUid = gs.MapPool.Length > 0 ? gs.MapPool[Random.Shared.Next(gs.MapPool.Length)] : "",
+			MapUid = maps.PickMap(new[] { a, b }),
 			Host = gs.PublicHost,
 			Password = Tokens.NewSecret(12)
 		};
@@ -236,17 +230,7 @@ public class Matchmaker : BackgroundService
 		var rw = ratings[winner.UserId];
 		var rl = ratings[loser.UserId];
 
-		if (m.Rated)
-		{
-			var (newW, newL) = RatingSystem.Elo(rw.Mmr, rl.Mmr, options.Matchmaking.EloKFactor);
-			rw.Mmr = Math.Round(newW, 1);
-			rl.Mmr = Math.Round(newL, 1);
-		}
-
-		winner.MmrAfter = rw.Mmr;
-		loser.MmrAfter = rl.Mmr;
-		rw.Games++; rw.Wins++; rw.UpdatedAt = DateTime.UtcNow;
-		rl.Games++; rl.Losses++; rl.UpdatedAt = DateTime.UtcNow;
+		ratingService.ApplyResult(m, winner, loser, rw, rl);
 
 		m.Status = MatchStatus.Completed;
 		m.StatusReason = reason;
