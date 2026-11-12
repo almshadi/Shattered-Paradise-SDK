@@ -171,7 +171,7 @@ All endpoints take `Authorization: Bearer <token>`; non-admins get `403 {"error"
 
 ## Rating system
 
-**Glicko-2** (Glickman 2012), implemented in `ranked/backend/Rating/Glicko2.cs`; one match = one rating period. Each player has a rating (`mmr`, starts at 1500), a rating deviation (`deviation`, uncertainty, starts at 350) and a volatility (0.06). New players' ratings move a lot; as the deviation shrinks, changes get smaller. Inactivity: before each rated game the deviation grows with the days since the player's last rated game (`phi* = sqrt(phi² + σ²·days/7)`, capped at 350), so returning players re-calibrate faster. With `RatingUpdates=false` games/wins/losses are still counted, but rating values never change.
+**Glicko-2** (Glickman 2012), implemented in `ranked/backend/Rating/Glicko2.cs`; one match = one rating period. Each player has a rating (`mmr`, starts at 1500), a rating deviation (`deviation`, uncertainty, starts at 350) and a volatility (0.06). New players' ratings move a lot; as the deviation shrinks, changes get smaller. Inactivity: before each rated game the deviation grows with the days since the player's last rated game (`phi* = sqrt(phi² + σ²·days/7)`, capped at 350), so returning players re-calibrate faster. With `RatingUpdates=false` (test mode) matches are recorded in the history, but neither ratings nor games/wins/losses/placement progress change.
 
 **Placement:** a player appears on `/leaderboard` once they have played `PlacementGames` (default 5) games in the current season and are not banned. `/me` returns `placed`, `placementGamesLeft` and `deviation`; the leaderboard's `me` row is present during placement too (`rank: null, placed: false`).
 
