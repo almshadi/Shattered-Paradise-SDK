@@ -47,8 +47,12 @@ public class RatingService
 		winner.DeviationAfter = rw.Deviation;
 		loser.DeviationAfter = rl.Deviation;
 
-		rw.Games++; rw.Wins++; rw.SeasonId = seasonId;
-		rl.Games++; rl.Losses++; rl.SeasonId = seasonId;
+		// Unrated (test) matches leave the player's record alone: no games, wins/losses or placement progress.
+		if (m.Rated)
+		{
+			rw.Games++; rw.Wins++; rw.SeasonId = seasonId;
+			rl.Games++; rl.Losses++; rl.SeasonId = seasonId;
+		}
 	}
 
 	GlickoRating Inflate(Rating r, DateTime now)

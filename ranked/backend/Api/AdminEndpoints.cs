@@ -251,11 +251,12 @@ public static class AdminEndpoints
 						r.Mmr = Math.Round(r.Mmr - mmrDelta, 1);
 						if (p.DeviationBefore is { } dev)
 							r.Deviation = dev;
-						if (p.Result != MatchResult.None)
+						// Unrated matches never counted towards the record (see RatingService), so nothing to undo there.
+						if (m.Rated && p.Result != MatchResult.None)
 							r.Games = Math.Max(0, r.Games - 1);
-						if (p.Result == MatchResult.Win)
+						if (m.Rated && p.Result == MatchResult.Win)
 							r.Wins = Math.Max(0, r.Wins - 1);
-						else if (p.Result == MatchResult.Loss)
+						else if (m.Rated && p.Result == MatchResult.Loss)
 							r.Losses = Math.Max(0, r.Losses - 1);
 						r.UpdatedAt = DateTime.UtcNow;
 
