@@ -70,6 +70,22 @@ Login flow: the game asks the backend to start a login → opens the browser →
 
 Timeouts: the queue drops a player who stops polling (30s); a match is cancelled if the game hasn't started within 5 min; games longer than 3 h are voided.
 
+## Queue rules
+
+Options live in `Ranked:Queue` (env `Ranked__Queue__...`).
+
+- **Dodge penalty.** Leaving a match before it started (`POST /matches/{id}/leave` while Starting/WaitingForPlayers), or never
+  connecting to the game server before the start timeout, is a dodge. Each dodge blocks the queue for
+  `DodgePenaltyMinutes[n-1]` (default `[2, 5, 15]`, the last value repeats); the counter resets when the previous dodge is
+  older than `DodgeResetHours` (24). Only the dodger is penalised; the opponent is not re-queued automatically.
+  While blocked, `POST /queue` → 409 `{"error":"queue_cooldown","until":iso,"seconds":int,"dodges":int}`.
+- **Bans.** A user with `BannedUntil` in the future gets 409 `{"error":"banned","until":iso|null,"reason":string|null}`
+  (`until` is null for permanent bans) and is removed from the queue. Check order: client version → ban → cooldown.
+- **Map vetoes.** `POST /queue {"faction","color","vetoes":[mapUid,...]}`: up to `MaxMapVetoes` (2) maps from the pool;
+  unknown uids and duplicates are ignored. The map is picked at random from the pool minus both players' vetoes (full pool
+  if nothing is left). `/config` returns `mapPool` and `maxMapVetoes`.
+- **Queue visibility.** `GET /queue/stats` (public) → `{"searching":int,"playing":int,"matchesInProgress":int}`.
+
 ## Hosting (live: ranked.tabletstrats.com)
 
 The live stack runs on the tabletstrats.com server, next to other sites, isolated in its own Docker project:

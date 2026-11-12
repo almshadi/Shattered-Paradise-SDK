@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Ranked.Backend.Auth;
 using Ranked.Backend.Data;
 using Ranked.Backend.Matchmaking;
+using Ranked.Backend.Notifications;
 
 namespace Ranked.Backend.Api;
 
@@ -91,7 +92,7 @@ public static class ServerEndpoints
 				return Results.NoContent();
 			}));
 
-		g.MapPost("/result", async (Guid id, ResultEvent e, RankedDb db, MatchmakingLock gate, Matchmaker mm) =>
+		g.MapPost("/result", async (Guid id, ResultEvent e, RankedDb db, MatchmakingLock gate, Matchmaker mm, IRankedNotifier notifier) =>
 			await Locked(gate, async () =>
 			{
 				var m = await Load(db, id);
@@ -100,6 +101,7 @@ public static class ServerEndpoints
 
 				await mm.Complete(db, m, e.WinnerUserId, e.Reason ?? "defeat");
 				await db.SaveChangesAsync();
+				notifier.MatchCompleted(m.Id);
 				return Results.NoContent();
 			}));
 

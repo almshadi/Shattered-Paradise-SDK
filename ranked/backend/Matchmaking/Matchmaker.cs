@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Ranked.Backend.Api;
 using Ranked.Backend.Auth;
 using Ranked.Backend.Data;
 using Ranked.Backend.Ratings;
@@ -25,10 +26,11 @@ public class Matchmaker : BackgroundService
 	readonly RatingService ratingService;
 	readonly MatchmakingLock gate;
 	readonly RankedOptions options;
+	readonly QueueOptions queueOptions;
 	readonly ILogger<Matchmaker> log;
 
 	public Matchmaker(IServiceScopeFactory scopes, GameServerManager servers, MapPicker maps, RatingService ratingService,
-		MatchmakingLock gate, IOptions<RankedOptions> options, ILogger<Matchmaker> log)
+		MatchmakingLock gate, IOptions<RankedOptions> options, IOptions<QueueOptions> queueOptions, ILogger<Matchmaker> log)
 	{
 		this.scopes = scopes;
 		this.servers = servers;
@@ -36,6 +38,7 @@ public class Matchmaker : BackgroundService
 		this.ratingService = ratingService;
 		this.gate = gate;
 		this.options = options.Value;
+		this.queueOptions = queueOptions.Value;
 		this.log = log;
 	}
 
@@ -92,8 +95,11 @@ public class Matchmaker : BackgroundService
 
 	async Task DropStaleQueueEntries(RankedDb db)
 	{
-		var cutoff = DateTime.UtcNow.AddSeconds(-options.Matchmaking.QueueStaleSeconds);
-		var removed = await db.Queue.Where(q => q.LastPollAt < cutoff).ExecuteDeleteAsync();
+		var now = DateTime.UtcNow;
+		var cutoff = now.AddSeconds(-options.Matchmaking.QueueStaleSeconds);
+
+		// Also drops players who were banned while searching.
+		var removed = await db.Queue.Where(q => q.LastPollAt < cutoff || q.User!.BannedUntil > now).ExecuteDeleteAsync();
 		if (removed > 0)
 			log.LogInformation("Dropped {Count} stale queue entries", removed);
 	}
@@ -195,11 +201,21 @@ public class Matchmaker : BackgroundService
 	{
 		var now = DateTime.UtcNow;
 		var mm = options.Matchmaking;
-		var open = await db.Matches.Where(m => MatchStates.Active.Contains(m.Status)).ToListAsync();
+		var open = await db.Matches.Include(m => m.Players).ThenInclude(p => p.User)
+			.Where(m => MatchStates.Active.Contains(m.Status)).ToListAsync();
 		foreach (var m in open)
 		{
 			if (m.Status != MatchStatus.InProgress && m.CreatedAt < now.AddSeconds(-mm.MatchStartTimeoutSeconds))
+			{
 				Close(m, MatchStatus.Cancelled, "start_timeout");
+
+				// Matched but never connected to the game server: a dodge. Players who did join are not penalised.
+				foreach (var p in m.Players.Where(p => !p.Joined))
+				{
+					QueueRestrictions.ApplyDodge(p.User!, queueOptions, now);
+					log.LogInformation("Match {Match}: {User} never joined (dodge #{Count})", m.Id, p.User!.DisplayName, p.User.DodgeCount);
+				}
+			}
 			else if (m.Status == MatchStatus.InProgress && m.StartedAt < now.AddMinutes(-mm.MatchMaxDurationMinutes))
 				Close(m, MatchStatus.Void, "max_duration");
 			else if (!servers.IsRunning(m.Id))

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Ranked.Backend.Auth;
 using Ranked.Backend.Data;
 using Ranked.Backend.Matchmaking;
+using Ranked.Backend.Notifications;
 using static Ranked.Backend.Api.ApiShared;
 
 namespace Ranked.Backend.Api;
@@ -12,11 +13,32 @@ public static class QueueEndpoints
 {
 	public static void Map(WebApplication app)
 	{
-		app.MapPost("/queue", async (HttpContext ctx, QueueRequest? req, RankedDb db, MatchmakingLock gate, ModVersionReader versions, IOptions<RankedOptions> opt) =>
+		app.MapPost("/queue", async (HttpContext ctx, QueueRequest? req, RankedDb db, MatchmakingLock gate, ModVersionReader versions,
+			IOptions<RankedOptions> opt, IOptions<QueueOptions> queueOpt, IRankedNotifier notifier) =>
 		{
 			var user = await CurrentUser.GetAsync(ctx, db);
 			if (user == null)
 				return Results.Unauthorized();
+
+			if (ClientVersion.Check(ctx, versions, opt.Value) is { } mismatch)
+				return mismatch;
+
+			// Banned or on a dodge cooldown: refuse and make sure no old entry keeps searching.
+			if (QueueRestrictions.Check(user, DateTime.UtcNow) is { } restricted)
+			{
+				await db.SaveChangesAsync();
+				await gate.Gate.WaitAsync();
+				try
+				{
+					await db.Queue.Where(q => q.UserId == user.Id).ExecuteDeleteAsync();
+				}
+				finally
+				{
+					gate.Gate.Release();
+				}
+
+				return restricted;
+			}
 
 			if (user.NeedsNickname)
 				return Results.Json(new { error = "nickname_required" }, statusCode: 409);
@@ -24,10 +46,9 @@ public static class QueueEndpoints
 			// The game server validates the faction against the map rules; here we only keep it sane.
 			var faction = req?.Faction is { Length: > 0 and <= 32 } f && f.All(char.IsAsciiLetterOrDigit) ? f : "Random";
 			var color = req?.Color is { Length: 6 } c && c.All(char.IsAsciiHexDigit) ? c.ToUpperInvariant() : null;
+			var vetoes = QueueRestrictions.SanitizeVetoes(req?.Vetoes, opt.Value.GameServers.MapPool, queueOpt.Value.MaxMapVetoes);
 
-			if (ClientVersion.Check(ctx, versions, opt.Value) is { } mismatch)
-				return mismatch;
-
+			int? newQueueSize = null;
 			await gate.Gate.WaitAsync();
 			try
 			{
@@ -36,22 +57,37 @@ public static class QueueEndpoints
 
 				var entry = await db.Queue.FindAsync(user.Id);
 				if (entry == null)
-					db.Queue.Add(new QueueEntry { UserId = user.Id, MmrSnapshot = user.Rating!.Mmr, Faction = faction, Color = color });
+					db.Queue.Add(new QueueEntry { UserId = user.Id, MmrSnapshot = user.Rating!.Mmr, Faction = faction, Color = color, MapVetoes = vetoes });
 				else
 				{
 					entry.LastPollAt = DateTime.UtcNow;
 					entry.Faction = faction;
 					entry.Color = color;
+					entry.MapVetoes = vetoes;
 				}
 
 				await db.SaveChangesAsync();
+				if (entry == null)
+					newQueueSize = await db.Queue.CountAsync();
 			}
 			finally
 			{
 				gate.Gate.Release();
 			}
 
+			if (newQueueSize != null)
+				notifier.PlayerQueued(user.Id, newQueueSize.Value);
+
 			return Results.Ok(new { state = "queued" });
+		});
+
+		// Public queue activity, e.g. for a "N searching / N playing" line in the client.
+		app.MapGet("/queue/stats", async (RankedDb db) =>
+		{
+			var searching = await db.Queue.CountAsync();
+			var matchesInProgress = await db.Matches.CountAsync(m => m.Status == MatchStatus.InProgress);
+			var playing = await db.MatchPlayers.CountAsync(p => p.Match!.Status == MatchStatus.InProgress);
+			return Results.Ok(new { searching, playing, matchesInProgress });
 		});
 
 		app.MapDelete("/queue", async (HttpContext ctx, RankedDb db, MatchmakingLock gate) =>
@@ -140,7 +176,8 @@ public static class QueueEndpoints
 
 		// The player backed out of a match before it started (left the lobby / closed the dialog).
 		// The match is cancelled for both; nobody is re-queued automatically.
-		app.MapPost("/matches/{id:guid}/leave", async (Guid id, HttpContext ctx, RankedDb db, MatchmakingLock gate, Matchmaker mm) =>
+		// Backing out before the start counts as a dodge (queue cooldown for the leaver only).
+		app.MapPost("/matches/{id:guid}/leave", async (Guid id, HttpContext ctx, RankedDb db, MatchmakingLock gate, Matchmaker mm, IOptions<QueueOptions> queueOpt) =>
 		{
 			var user = await CurrentUser.GetAsync(ctx, db);
 			if (user == null)
@@ -157,6 +194,7 @@ public static class QueueEndpoints
 				if (m.Status is MatchStatus.Starting or MatchStatus.WaitingForPlayers)
 				{
 					mm.Close(m, MatchStatus.Cancelled, $"left_lobby:{user.Id}");
+					QueueRestrictions.ApplyDodge(user, queueOpt.Value, DateTime.UtcNow);
 					await db.SaveChangesAsync();
 				}
 
