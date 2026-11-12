@@ -113,11 +113,18 @@ Background@RANKED_PANEL:
 			X: 20
 			Y: 235
 			Width: PARENT_WIDTH - 40
-			Height: 40
+			Height: 22
 			Align: Center
 			VAlign: Top
 			Font: Small
 			WordWrap: true
+		Label@VERSION:
+			X: 20
+			Y: 259
+			Width: PARENT_WIDTH - 40
+			Height: 16
+			Align: Center
+			Font: Tiny
 		Button@PRIMARY_BUTTON:
 			X: 20
 			Y: PARENT_HEIGHT - 45

@@ -31,6 +31,17 @@ namespace OpenRA.Mods.Sp.Ranked
 		{
 			var button = (ButtonWidget)widget;
 			button.OnClick = () => OpenPanel(widget);
+
+			// One background check so outdated clients see they need an update before opening the panel.
+			// Failures (server unreachable etc.) leave the normal label.
+			var updateRequired = false;
+			var normalText = button.GetText;
+			button.GetText = () => updateRequired ? "Ranked (update)" : normalText();
+			RankedApi.Get("/config", r =>
+			{
+				if (r.Ok && !r.Body.VersionOk())
+					updateRequired = true;
+			});
 		}
 
 		static void OpenPanel(Widget button)
@@ -74,7 +85,7 @@ namespace OpenRA.Mods.Sp.Ranked
 
 	public class RankedLogic : ChromeLogic
 	{
-		enum State { Checking, LoggedOut, WaitingForBrowser, NeedsNickname, Idle, Queued, MatchFound, Joining }
+		enum State { Checking, LoggedOut, WaitingForBrowser, NeedsNickname, Idle, Queued, MatchFound, Joining, UpdateRequired }
 
 		// Remembered for the rest of the session.
 		static string selectedFaction = "Random";
@@ -106,6 +117,9 @@ namespace OpenRA.Mods.Sp.Ranked
 		string loginId;
 		string pollSecret;
 		string browserUrl;
+		string requiredVersion;
+		string yourVersion;
+		string downloadUrl;
 
 		[ObjectCreator.UseCtor]
 		public RankedLogic(Widget widget, ModData modData, WorldRenderer worldRenderer, Action onExit, Action onStart, Action reopen)
@@ -127,7 +141,7 @@ namespace OpenRA.Mods.Sp.Ranked
 			widget.Get<LabelWidget>("NICKNAME_LABEL").IsVisible = nicknameField.IsVisible;
 
 			var leaderboard = widget.Get<ButtonWidget>("LEADERBOARD_BUTTON");
-			leaderboard.IsVisible = () => state is State.Idle or State.LoggedOut;
+			leaderboard.IsVisible = () => state is State.Idle or State.LoggedOut or State.UpdateRequired;
 			leaderboard.OnClick = () => Ui.OpenWindow("RANKED_LEADERBOARD_PANEL", new WidgetArgs { { "onExit", (Action)(() => { }) } });
 
 			var rename = widget.Get<ButtonWidget>("RENAME_BUTTON");
@@ -145,6 +159,8 @@ namespace OpenRA.Mods.Sp.Ranked
 			widget.Get<LabelWidget>("STATUS").GetText = () => status;
 			widget.Get<LabelWidget>("DETAIL").GetText = () => detail;
 			widget.Get<LabelWidget>("INFO").GetText = () => info;
+			var versionText = "Your version: " + RankedApi.ClientVersion;
+			widget.Get<LabelWidget>("VERSION").GetText = () => versionText;
 
 			devNameField = widget.Get<TextFieldWidget>("DEV_NAME");
 			devNameField.IsVisible = () => state == State.LoggedOut && devLoginAvailable;
@@ -159,6 +175,7 @@ namespace OpenRA.Mods.Sp.Ranked
 				State.WaitingForBrowser => "Open browser again",
 				State.Idle => "Find match",
 				State.Queued => "Cancel search",
+				State.UpdateRequired => "Download update",
 				_ => "Please wait..."
 			};
 			primary.IsDisabled = () => requestInFlight || state is State.Checking or State.MatchFound or State.Joining;
@@ -172,7 +189,8 @@ namespace OpenRA.Mods.Sp.Ranked
 				State.NeedsNickname when renaming => "Cancel",
 				_ => "Sign out"
 			};
-			secondary.IsVisible = () => (state == State.LoggedOut && devLoginAvailable) || state is State.WaitingForBrowser or State.Idle or State.NeedsNickname;
+			secondary.IsVisible = () => (state == State.LoggedOut && devLoginAvailable) || state is State.WaitingForBrowser or State.Idle or State.NeedsNickname
+				|| (state == State.UpdateRequired && RankedApi.Token != null);
 			secondary.IsDisabled = () => requestInFlight;
 			secondary.OnClick = OnSecondary;
 
@@ -200,9 +218,16 @@ namespace OpenRA.Mods.Sp.Ranked
 				var rated = r.Body.Bool("ratingUpdates");
 				info = $"Queue: {mode?.ToUpperInvariant()}  |  Ratings: {(rated ? "ON" : "OFF (test mode)")}";
 
-				var required = r.Body.Str("requiredClientVersion");
-				if (!string.IsNullOrEmpty(required) && required != RankedApi.ClientVersion)
-					info += $"\nVersion mismatch: server wants {required}, you have {RankedApi.ClientVersion}";
+				if (!r.Body.VersionOk())
+				{
+					SetUpdateRequired(r.Body.Str("requiredClientVersion"), RankedApi.ClientVersion, r.Body.Str("clientDownloadUrl"));
+
+					// Still show who is signed in; LoadProfile won't leave the UpdateRequired state.
+					if (RankedApi.Token != null)
+						LoadProfile();
+
+					return;
+				}
 
 				if (RankedApi.Token == null)
 					SetLoggedOut("Not signed in", "Sign in to play ranked matches.");
@@ -224,12 +249,54 @@ namespace OpenRA.Mods.Sp.Ranked
 			detail = d;
 		}
 
+		void SetUpdateRequired(string required, string yours, string url)
+		{
+			if (state is State.Queued or State.MatchFound)
+				RankedApi.Delete("/queue", _ => { });
+
+			state = State.UpdateRequired;
+			requiredVersion = string.IsNullOrEmpty(required) ? "a different version" : required;
+			yourVersion = string.IsNullOrEmpty(yours) ? RankedApi.ClientVersion : yours;
+			downloadUrl = string.IsNullOrEmpty(url) ? RankedApi.DefaultDownloadUrl : url;
+			UpdateRequiredText();
+		}
+
+		// Server sends 409 { error: "version_mismatch", required, yours, downloadUrl }.
+		void SetUpdateRequired(ApiResult r) =>
+			SetUpdateRequired(r.Body.Str("required"), r.Body.Str("yours"), r.Body.Str("downloadUrl"));
+
+		void UpdateRequiredText()
+		{
+			status = "Update required";
+			detail = $"This ranked server runs {requiredVersion}.\nYou have {yourVersion}. Download the new version to play ranked.";
+			if (RankedApi.Token != null && userName != null)
+				detail += $"\nSigned in as {userName}";
+		}
+
 		void LoadProfile(string extra = null)
 		{
 			RankedApi.Get("/me", r =>
 			{
 				if (disposed)
 					return;
+
+				// Outdated client: only pick up the name, never leave this state.
+				if (state == State.UpdateRequired)
+				{
+					if (r.Status == 401)
+					{
+						RankedApi.SaveToken(null);
+						userName = null;
+					}
+					else if (r.Ok)
+					{
+						userId = r.Body.Str("id");
+						userName = r.Body.Str("name");
+					}
+
+					UpdateRequiredText();
+					return;
+				}
 
 				if (r.Status == 401)
 				{
@@ -312,6 +379,7 @@ namespace OpenRA.Mods.Sp.Ranked
 				case State.WaitingForBrowser: RankedApi.OpenInBrowser(browserUrl); break;
 				case State.Idle: JoinQueue(); break;
 				case State.Queued: LeaveQueue(); break;
+				case State.UpdateRequired: RankedApi.OpenInBrowser(downloadUrl ?? RankedApi.DefaultDownloadUrl); break;
 			}
 		}
 
@@ -342,6 +410,13 @@ namespace OpenRA.Mods.Sp.Ranked
 				case State.WaitingForBrowser:
 					loginId = null;
 					SetLoggedOut("Not signed in", "Sign-in cancelled.");
+					break;
+
+				case State.UpdateRequired:
+					RankedApi.Post("/auth/logout", null, _ => { });
+					RankedApi.SaveToken(null);
+					userName = null;
+					UpdateRequiredText();
 					break;
 
 				default:
@@ -476,11 +551,16 @@ namespace OpenRA.Mods.Sp.Ranked
 			RankedApi.Post("/queue", new { faction = selectedFaction, color = $"{color.R:X2}{color.G:X2}{color.B:X2}" }, r =>
 			{
 				requestInFlight = false;
+				if (r.Error == "version_mismatch")
+				{
+					SetUpdateRequired(r);
+					return;
+				}
+
 				if (!r.Ok)
 				{
 					detail = r.Error switch
 					{
-						"version_mismatch" => $"Your game version ({RankedApi.ClientVersion}) doesn't match the server ({r.Body.Str("required")}).",
 						"already_in_match" => "You are already in a match.",
 						"nickname_required" => "Choose a nickname first.",
 						_ => "Could not join queue: " + r.Error
@@ -513,8 +593,15 @@ namespace OpenRA.Mods.Sp.Ranked
 			RankedApi.Get("/queue/status", r =>
 			{
 				pollInFlight = false;
-				if (disposed || state is State.Joining or State.LoggedOut)
+				if (disposed || state is State.Joining or State.LoggedOut or State.UpdateRequired)
 					return;
+
+				// Stops polling: Tick only polls while Queued / MatchFound.
+				if (r.Error == "version_mismatch")
+				{
+					SetUpdateRequired(r);
+					return;
+				}
 
 				if (!r.Ok)
 				{

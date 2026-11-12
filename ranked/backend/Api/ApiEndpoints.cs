@@ -53,7 +53,7 @@ public static class ApiEndpoints
 			return Results.NoContent();
 		});
 
-		app.MapPost("/queue", async (HttpContext ctx, QueueRequest? req, RankedDb db, MatchmakingLock gate, IOptions<RankedOptions> opt) =>
+		app.MapPost("/queue", async (HttpContext ctx, QueueRequest? req, RankedDb db, MatchmakingLock gate, ModVersionReader versions, IOptions<RankedOptions> opt) =>
 		{
 			var user = await CurrentUser.GetAsync(ctx, db);
 			if (user == null)
@@ -66,10 +66,8 @@ public static class ApiEndpoints
 			var faction = req?.Faction is { Length: > 0 and <= 32 } f && f.All(char.IsAsciiLetterOrDigit) ? f : "Random";
 			var color = req?.Color is { Length: 6 } c && c.All(char.IsAsciiHexDigit) ? c.ToUpperInvariant() : null;
 
-			var required = opt.Value.RequiredClientVersion;
-			var version = ctx.Request.Headers["X-Client-Version"].ToString();
-			if (!string.IsNullOrEmpty(required) && version != required)
-				return Results.Json(new { error = "version_mismatch", required, yours = version }, statusCode: 409);
+			if (ClientVersion.Check(ctx, versions, opt.Value) is { } mismatch)
+				return mismatch;
 
 			await gate.Gate.WaitAsync();
 			try
@@ -117,11 +115,28 @@ public static class ApiEndpoints
 		});
 
 		// Polled by the client every ~2s while searching. Also keeps the queue entry alive.
-		app.MapGet("/queue/status", async (HttpContext ctx, RankedDb db) =>
+		app.MapGet("/queue/status", async (HttpContext ctx, RankedDb db, MatchmakingLock gate, ModVersionReader versions, IOptions<RankedOptions> opt) =>
 		{
 			var user = await CurrentUser.GetAsync(ctx, db);
 			if (user == null)
 				return Results.Unauthorized();
+
+			// The server build changed (or the client did) while searching: drop the entry so the player is never matched.
+			if (ClientVersion.Check(ctx, versions, opt.Value) is { } mismatch)
+			{
+				await db.SaveChangesAsync();
+				await gate.Gate.WaitAsync();
+				try
+				{
+					await db.Queue.Where(q => q.UserId == user.Id).ExecuteDeleteAsync();
+				}
+				finally
+				{
+					gate.Gate.Release();
+				}
+
+				return mismatch;
+			}
 
 			var match = await ActiveMatchFor(db, user.Id);
 			if (match != null)
@@ -274,14 +289,20 @@ public static class ApiEndpoints
 			});
 		});
 
-		app.MapGet("/config", (IOptions<RankedOptions> opt) => Results.Ok(new
+		app.MapGet("/config", (HttpContext ctx, ModVersionReader versions, IOptions<RankedOptions> opt) =>
 		{
-			mode = opt.Value.Matchmaking.Mode,
-			ratingUpdates = opt.Value.Matchmaking.RatingUpdates,
-			devLogin = opt.Value.Auth.DevLogin,
-			googleConfigured = !string.IsNullOrEmpty(opt.Value.Auth.GoogleClientId),
-			requiredClientVersion = opt.Value.RequiredClientVersion
-		}));
+			var required = versions.Required;
+			return Results.Ok(new
+			{
+				mode = opt.Value.Matchmaking.Mode,
+				ratingUpdates = opt.Value.Matchmaking.RatingUpdates,
+				devLogin = opt.Value.Auth.DevLogin,
+				googleConfigured = !string.IsNullOrEmpty(opt.Value.Auth.GoogleClientId),
+				requiredClientVersion = required,
+				clientDownloadUrl = opt.Value.ClientDownloadUrl,
+				versionOk = ClientVersion.IsOk(required, ClientVersion.Of(ctx))
+			});
+		});
 	}
 
 	public static Task<Match?> ActiveMatchFor(RankedDb db, Guid userId) =>

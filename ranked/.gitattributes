@@ -1,0 +1,2 @@
+# Windows launcher files must keep CRLF line endings exactly as written.
+launcher/* -text

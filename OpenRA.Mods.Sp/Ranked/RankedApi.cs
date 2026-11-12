@@ -58,6 +58,12 @@ namespace OpenRA.Mods.Sp.Ranked
 
 		public static string ClientVersion => Game.ModData.Manifest.Metadata.Version;
 
+		public const string DefaultDownloadUrl = "https://github.com/almshadi/Shattered-Paradise-sdk/releases/latest";
+
+		/// <summary>True unless a /config response explicitly says this client version can't play ranked.</summary>
+		public static bool VersionOk(this JsonElement config) =>
+			!(config.ValueKind == JsonValueKind.Object && config.TryGetProperty("versionOk", out var v) && v.ValueKind == JsonValueKind.False);
+
 		public static void LoadToken()
 		{
 			try

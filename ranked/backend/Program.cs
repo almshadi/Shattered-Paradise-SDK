@@ -30,6 +30,7 @@ builder.Services.Configure<RankedOptions>(builder.Configuration.GetSection("Rank
 builder.Services.AddDbContext<RankedDb>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Db")));
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<MatchmakingLock>();
+builder.Services.AddSingleton<ModVersionReader>();
 builder.Services.AddSingleton<GameServerManager>();
 builder.Services.AddSingleton<Matchmaker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Matchmaker>());
@@ -42,6 +43,13 @@ if (string.IsNullOrEmpty(options.ServerSecret))
 
 if (options.Auth.DevLogin)
 	app.Logger.LogWarning("DEV LOGIN IS ENABLED - anyone can log in as any test user. Do not use on a public server.");
+
+var versions = app.Services.GetRequiredService<ModVersionReader>();
+var requiredVersion = versions.Required;
+if (string.IsNullOrEmpty(requiredVersion))
+	app.Logger.LogWarning("No required client version could be determined - clients of any version will be accepted.");
+else
+	app.Logger.LogInformation("Required client version: {Version} (from {Source})", requiredVersion, versions.Source);
 
 // Prototype: create the schema on startup. Switch to EF migrations before real users depend on the data.
 using (var scope = app.Services.CreateScope())

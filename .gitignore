@@ -45,3 +45,6 @@ _ReSharper.*/
 
 # IntelliJ files
 .idea
+
+# Release packages (ranked/release.sh)
+/dist/

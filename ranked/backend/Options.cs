@@ -8,8 +8,12 @@ public class RankedOptions
 	// Shared secret between backend and the game servers it spawns.
 	public string ServerSecret { get; set; } = "";
 
-	// Clients must report exactly this version (empty = accept any). Prevents mismatched builds being matched.
+	// Clients must report exactly this version. Empty = use the mod version of the SDK checkout the game servers run
+	// from (mods/sp/mod.yaml). Prevents mismatched builds being matched.
 	public string RequiredClientVersion { get; set; } = "";
+
+	// Where players get the matching client build; returned with version_mismatch errors and from /config.
+	public string ClientDownloadUrl { get; set; } = "https://github.com/almshadi/Shattered-Paradise-sdk/releases/latest";
 
 	public AuthOptions Auth { get; set; } = new();
 	public MatchmakingOptions Matchmaking { get; set; } = new();

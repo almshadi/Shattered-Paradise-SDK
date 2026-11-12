@@ -30,7 +30,8 @@ The game servers need the .NET 6 runtime (`dotnet --list-runtimes`).
 | `Ranked__Matchmaking__Mode` | `fifo` / `mmr` | `fifo` pairs the first two players in the queue. `mmr` pairs by rating, and the allowed rating gap grows the longer someone waits. |
 | `Ranked__Matchmaking__RatingUpdates` | `true` / `false` | `false` = matches and results are recorded, but ratings never change (test mode) |
 | `Ranked__Auth__DevLogin` | `true` / `false` | Log in as a named test user without Google. **Never enable on a public server.** |
-| `Ranked__RequiredClientVersion` | e.g. `sp-ranked-0.1` | Reject clients with a different version (set the mod version with `make version VERSION=...`) |
+| `Ranked__RequiredClientVersion` | empty (default) / e.g. `ranked-0.1.0` | Clients must send exactly this version (`X-Client-Version`) to queue; others get HTTP 409 `version_mismatch`. Empty = automatic: the `Version` from `mods/sp/mod.yaml` of the SDK checkout the game servers run from (re-read when the file changes). Set the mod version with `make version VERSION=...` |
+| `Ranked__ClientDownloadUrl` | URL (default: GitHub latest release) | Where outdated clients are sent to download the matching build (returned in `/config` and in `version_mismatch` errors) |
 
 Restart the backend after changing settings. Ratings use Elo (K=32) for now; the rating calculation is a single function (`RatingSystem` in `Matchmaker.cs`), so swapping in Glicko-2 later won't affect the rest of the code.
 
@@ -88,3 +89,18 @@ Then set `RankedSettings: BackendUrl` in `mods/sp/mod.yaml` to the public URL an
 - One backend instance (in-process lock). Game servers run on the backend host.
 - Reading the server's win/loss record uses reflection on `Server.gameInfo` (private). If the engine is updated, check that `RankedMatchServer` still works.
 - Map hacks / client-side cheats are not addressed.
+
+## Releasing a new version
+
+`ranked/release.sh` builds the Windows package and publishes it on the fork:
+
+```
+ranked/release.sh ranked-0.1.0 --dry-run   # set version, build, zip; then restore mod.yaml
+ranked/release.sh ranked-0.1.0             # same + commit "Release ...", tag, push to `fork`, GitHub release
+```
+
+- The version must look like `ranked-X.Y.Z` and is also the git tag. The working tree must have no uncommitted changes to tracked files.
+- It runs `make version` (keeping `mods/sp/mod.yaml` CRLF) and `make TARGETPLATFORM=win-x64` (log in `dist/build-<version>.log`).
+- Output: `dist/ShatteredParadise-<version>-win64.zip` with a `ShatteredParadise-<version>/` folder: the game tree plus `play.cmd` and `README.txt` from `ranked/launcher/` (the player needs the .NET 6 Desktop Runtime; `play.cmd` checks for it).
+- With the GitHub CLI (`gh`) installed the release is created automatically; otherwise the script prints the manual upload steps (https://github.com/almshadi/Shattered-Paradise-sdk/releases/new).
+- Both players' clients and the game servers must run the same version.
