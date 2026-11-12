@@ -3,7 +3,7 @@ using Ranked.Backend.Data;
 namespace Ranked.Backend.Ratings;
 
 // Ranked seasons. The active season (if any) is the one with IsActive = true.
-// Callers own the DbContext and call SaveChangesAsync themselves.
+// Callers own the DbContext. StartNewAsync / EndActiveAsync save it themselves (transactionally), see SeasonService.
 public interface ISeasonService
 {
 	Task<Season?> GetActiveAsync(RankedDb db);
