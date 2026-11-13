@@ -3,7 +3,7 @@ Background@RANKED_LEADERBOARD_PANEL:
 	X: (WINDOW_WIDTH - WIDTH) / 2
 	Y: (WINDOW_HEIGHT - HEIGHT) / 2
 	Width: 600
-	Height: 480
+	Height: 515
 	Children:
 		Label@TITLE:
 			X: 0
@@ -13,9 +13,14 @@ Background@RANKED_LEADERBOARD_PANEL:
 			Text: label-ranked-leaderboard-title
 			Align: Center
 			Font: Bold
+		DropDownButton@SEASON:
+			X: (PARENT_WIDTH - WIDTH) / 2
+			Y: 52
+			Width: 300
+			Height: 25
 		Container@HEADERS:
 			X: 20
-			Y: 55
+			Y: 90
 			Width: PARENT_WIDTH - 40
 			Height: 25
 			Children:
@@ -27,16 +32,22 @@ Background@RANKED_LEADERBOARD_PANEL:
 					Font: Bold
 				Label@NAME:
 					X: 60
-					Width: 200
+					Width: 165
 					Height: 25
 					Text: label-ranked-col-player
 					Font: Bold
 				Label@RATING:
-					X: 265
-					Width: 70
+					X: 230
+					Width: 60
 					Height: 25
 					Text: label-ranked-col-rating
 					Align: Right
+					Font: Bold
+				Label@DEVIATION:
+					X: 295
+					Width: 45
+					Height: 25
+					Text: label-ranked-col-deviation
 					Font: Bold
 				Label@WINS:
 					X: 345
@@ -61,9 +72,9 @@ Background@RANKED_LEADERBOARD_PANEL:
 					Font: Bold
 		ScrollPanel@LIST:
 			X: 20
-			Y: 82
+			Y: 117
 			Width: PARENT_WIDTH - 40
-			Height: PARENT_HEIGHT - 175
+			Height: PARENT_HEIGHT - 210
 			TopBottomSpacing: 2
 			Children:
 				ScrollItem@TEMPLATE:
@@ -78,13 +89,18 @@ Background@RANKED_LEADERBOARD_PANEL:
 							Height: 25
 						Label@NAME:
 							X: 58
-							Width: 200
+							Width: 165
 							Height: 25
 						Label@RATING:
-							X: 263
-							Width: 70
+							X: 228
+							Width: 60
 							Height: 25
 							Align: Right
+						Label@DEVIATION:
+							X: 293
+							Width: 45
+							Height: 25
+							Font: Small
 						Label@WINS:
 							X: 343
 							Width: 50
@@ -102,9 +118,9 @@ Background@RANKED_LEADERBOARD_PANEL:
 							Align: Right
 		Label@STATUS:
 			X: 20
-			Y: 82
+			Y: 117
 			Width: PARENT_WIDTH - 40
-			Height: PARENT_HEIGHT - 175
+			Height: PARENT_HEIGHT - 210
 			Align: Center
 		Label@ME:
 			X: 20
@@ -128,3 +144,4 @@ Background@RANKED_LEADERBOARD_PANEL:
 			Text: button-back
 			Font: Bold
 			Key: escape
+		TooltipContainer@TOOLTIP_CONTAINER:
