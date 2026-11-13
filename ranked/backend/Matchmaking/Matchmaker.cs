@@ -91,6 +91,7 @@ public class Matchmaker : BackgroundService
 
 		await db.Queue.ExecuteDeleteAsync();
 		await db.SaveChangesAsync();
+		await servers.DeleteStaleSupportDirs(db);
 	}
 
 	async Task DropStaleQueueEntries(RankedDb db)
@@ -109,6 +110,13 @@ public class Matchmaker : BackgroundService
 		var queue = await db.Queue.Include(q => q.User).OrderBy(q => q.JoinedAt).ToListAsync();
 		while (queue.Count >= 2)
 		{
+			// All game server ports busy: keep everyone searching instead of creating a match that is cancelled at once.
+			if (servers.AllocatePort() == null)
+			{
+				log.LogDebug("No free game server port; {Count} players keep waiting", queue.Count);
+				break;
+			}
+
 			var pair = options.Matchmaking.Mode.Equals("mmr", StringComparison.OrdinalIgnoreCase)
 				? FindMmrPair(queue)
 				: (queue[0], queue[1]);
@@ -159,10 +167,12 @@ public class Matchmaker : BackgroundService
 			Password = Tokens.NewSecret(12)
 		};
 
-		foreach (var q in new[] { a, b })
+		// 1v1: each player is their own team (0 and 1); history, replay names and Discord posts group by team.
+		foreach (var (q, team) in new[] { (a, 0), (b, 1) })
 			match.Players.Add(new MatchPlayer
 			{
 				UserId = q.UserId,
+				Team = team,
 				Ticket = Tokens.NewSecret(),
 				MmrBefore = q.MmrSnapshot,
 				Faction = q.Faction,

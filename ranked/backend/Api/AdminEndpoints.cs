@@ -239,6 +239,13 @@ public static class AdminEndpoints
 						if (!ratings.TryGetValue(p.UserId, out var r))
 							continue;
 
+						// Unrated (test) matches changed neither the rating nor the record (see RatingService): nothing to undo.
+						if (!m.Rated)
+						{
+							reverted.Add(new { userId = p.UserId, skipped = "unrated" });
+							continue;
+						}
+
 						// A season reset happened since: the match belongs to an archived season, current rating stays.
 						if (r.SeasonId != m.SeasonId)
 						{
@@ -246,17 +253,16 @@ public static class AdminEndpoints
 							continue;
 						}
 
-						var mmrDelta = (p.MmrAfter ?? p.MmrBefore) - p.MmrBefore;
+						var mmrDelta = Math.Round((p.MmrAfter ?? p.MmrBefore) - p.MmrBefore, 1);
 						var before = new { mmr = r.Mmr, deviation = r.Deviation, games = r.Games, wins = r.Wins, losses = r.Losses };
 						r.Mmr = Math.Round(r.Mmr - mmrDelta, 1);
 						if (p.DeviationBefore is { } dev)
 							r.Deviation = dev;
-						// Unrated matches never counted towards the record (see RatingService), so nothing to undo there.
-						if (m.Rated && p.Result != MatchResult.None)
+						if (p.Result != MatchResult.None)
 							r.Games = Math.Max(0, r.Games - 1);
-						if (m.Rated && p.Result == MatchResult.Win)
+						if (p.Result == MatchResult.Win)
 							r.Wins = Math.Max(0, r.Wins - 1);
-						else if (m.Rated && p.Result == MatchResult.Loss)
+						else if (p.Result == MatchResult.Loss)
 							r.Losses = Math.Max(0, r.Losses - 1);
 						r.UpdatedAt = DateTime.UtcNow;
 

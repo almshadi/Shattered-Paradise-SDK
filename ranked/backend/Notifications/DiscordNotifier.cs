@@ -92,7 +92,7 @@ public sealed class DiscordNotifier : IRankedNotifier
 				if (m == null || m.Status != MatchStatus.Completed)
 					return;
 
-				var embed = BuildResultEmbed(m);
+				var embed = BuildResultEmbed(m, ranked.CurrentValue.GameServers.MapTitle(m.MapUid));
 				if (embed == null)
 					return;
 
@@ -107,7 +107,8 @@ public sealed class DiscordNotifier : IRankedNotifier
 	}
 
 	// "Alice defeated Bob on <map> · +16 / −16 · GDI vs Nod"
-	internal static Dictionary<string, object?>? BuildResultEmbed(Match m)
+	// mapTitle: display name of the map (GameServers:MapTitles), falls back to the uid.
+	internal static Dictionary<string, object?>? BuildResultEmbed(Match m, string? mapTitle = null)
 	{
 		var winners = m.Players.Where(p => p.Result == MatchResult.Win).OrderBy(p => p.Team).ToList();
 		var losers = m.Players.Where(p => p.Result == MatchResult.Loss).OrderBy(p => p.Team).ToList();
@@ -117,7 +118,9 @@ public sealed class DiscordNotifier : IRankedNotifier
 		static string Names(IEnumerable<MatchPlayer> ps) => string.Join(" & ", ps.Select(p => $"**{Md(p.User?.DisplayName ?? "?")}**"));
 		static string Factions(IEnumerable<MatchPlayer> ps) => string.Join(" & ", ps.Select(p => FactionName(p.Faction)));
 
-		var map = string.IsNullOrEmpty(m.MapUid) ? "an unknown map" : $"`{m.MapUid}`";
+		var map = string.IsNullOrEmpty(m.MapUid) ? "an unknown map"
+			: !string.IsNullOrWhiteSpace(mapTitle) ? $"**{Md(mapTitle)}**"
+			: $"`{m.MapUid[..Math.Min(8, m.MapUid.Length)]}`";
 		var summary = new List<string>();
 
 		var ratingChanged = m.Rated && m.Players.All(p => p.MmrAfter != null);

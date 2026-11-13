@@ -17,7 +17,7 @@ public class RatingService
 		this.scopes = scopes;
 	}
 
-	// Rating values only change for rated matches (Matchmaking:RatingUpdates); games/wins/losses always count.
+	// Only rated matches (Matchmaking:RatingUpdates) change rating values and games/wins/losses (placement progress).
 	public void ApplyResult(Match m, MatchPlayer winner, MatchPlayer loser, Rating rw, Rating rl)
 	{
 		var now = DateTime.UtcNow;

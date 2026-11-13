@@ -22,6 +22,7 @@ public static class ConfigEndpoints
 				clientDownloadUrl = opt.Value.ClientDownloadUrl,
 				versionOk = ClientVersion.IsOk(required, ClientVersion.Of(ctx)),
 				mapPool = opt.Value.GameServers.MapPool,
+				mapTitles = opt.Value.GameServers.MapTitles,
 				maxMapVetoes = queueOpt.Value.MaxMapVetoes
 			});
 		});

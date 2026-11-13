@@ -181,8 +181,13 @@
 		body.innerHTML = rows.map(rowHtml).join("");
 		var me = res.data.me;
 		var meVisible = rows.some(function (r) { return r.isYou; });
-		if (me && !meVisible)
-			$("lb-state").innerHTML = '<div class="me-row">Your rank: <b>#' + esc(me.rank) + "</b> · " + num(Math.round(me.mmr)) + " rating</div>";
+		if (me && !meVisible) {
+			// During placement the server sends rank: null, placed: false and placementGamesLeft.
+			var left = Number(me.placementGamesLeft) || 0;
+			$("lb-state").innerHTML = me.rank !== null && me.rank !== undefined
+				? '<div class="me-row">Your rank: <b>#' + esc(me.rank) + "</b> · " + num(Math.round(me.mmr)) + " rating</div>"
+				: '<div class="me-row">Placement: <b>' + left + "</b> more game" + (left === 1 ? "" : "s") + " until you appear on the leaderboard</div>";
+		}
 		else
 			showState("", "", "");
 	}

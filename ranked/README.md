@@ -53,7 +53,7 @@ Login flow: the game asks the backend to start a login → opens the browser →
 
 - `Ranked__Auth__DevLogin=true`, start the backend.
 - Start the game twice: `play.cmd` and `play-test2.cmd` (the second keeps a separate ranked login).
-- In each: **Ranked → Dev login** with different names → **Find match** → both join the lobby automatically → pick a faction → **Ready** → the game starts.
+- In each: **Ranked → Dev login** with different names → pick faction/colour → **Find match** → both join the lobby automatically → the game starts by itself ~10 s after both joined.
 - Surrender in one client; the other wins. Check `GET http://localhost:8090/leaderboard`.
 
 ## How a match plays out
@@ -62,7 +62,7 @@ Login flow: the game asks the backend to start a login → opens the browser →
 2. The clients poll `/queue/status`, receive host/port/password plus a personal ticket, connect, and send `ranked-auth <userId> <ticket>`.
 3. The server compares the ticket against the backend's hash. Unknown connections are kicked after 20s.
    Players can only change their own faction/color/spawn and toggle Ready; map, options, slots, teams and kicks are locked.
-4. Both players ready → the game starts. The server records the result from the game state that both clients must agree on, so a player can't fake a win.
+4. Both players joined → the game starts automatically after ~10 s (factions/colours were chosen in the Ranked panel before queueing). The server records the result from the game state that both clients must agree on, so a player can't fake a win.
    - Opponent disconnects for 30s → the remaining player wins.
    - Both disconnect → the match is voided.
    - Desync → no result, and the match is voided when the players leave.
@@ -83,7 +83,10 @@ Options live in `Ranked:Queue` (env `Ranked__Queue__...`).
   (`until` is null for permanent bans) and is removed from the queue. Check order: client version → ban → cooldown.
 - **Map vetoes.** `POST /queue {"faction","color","vetoes":[mapUid,...]}`: up to `MaxMapVetoes` (2) maps from the pool;
   unknown uids and duplicates are ignored. The map is picked at random from the pool minus both players' vetoes (full pool
-  if nothing is left). `/config` returns `mapPool` and `maxMapVetoes`.
+  if nothing is left). `/config` returns `mapPool`, `mapTitles` and `maxMapVetoes`.
+- **Map titles.** `Ranked:GameServers:MapTitles` (uid → display name, in `appsettings.json`; env
+  `Ranked__GameServers__MapTitles__<uid>=<title>`) is returned as `/config.mapTitles` and used by the admin page and the
+  Discord result posts. Maps without a title are shown by their short uid.
 - **Queue visibility.** `GET /queue/stats` (public) → `{"searching":int,"playing":int,"matchesInProgress":int}`.
 
 ## Hosting (live: ranked.tabletstrats.com)
@@ -166,7 +169,7 @@ All endpoints take `Authorization: Bearer <token>`; non-admins get `403 {"error"
 | `POST /admin/users/{id}/admin` `{"isAdmin":bool}` | grant / revoke admin (not on yourself) |
 | `GET /admin/matches?status=&userId=&limit=50` | status = a match status or `active` |
 | `POST /admin/matches/{id}/void` `{"reason":""}` | active match: closed as Void; completed match: rating/stat changes reverted, then Void |
-| `GET /admin/seasons`, `POST /admin/seasons/start` `{"name":""}`, `POST /admin/seasons/end` | season control (501 while seasons are not implemented) |
+| `GET /admin/seasons`, `POST /admin/seasons/start` `{"name":""}`, `POST /admin/seasons/end` | season control (see [Rating system](#rating-system)); ending with no active season → 409 `no_active_season` |
 | `GET /admin/actions?limit=100` | audit log, newest first |
 
 ## Rating system

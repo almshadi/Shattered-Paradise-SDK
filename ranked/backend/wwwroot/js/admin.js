@@ -414,7 +414,7 @@
 				danger: true,
 				fields: [
 					{ name: "mmr", label: "Rating", type: "number", step: 1, min: 0, max: 5000, required: true, value: u.mmr === null || u.mmr === undefined ? "" : Math.round(u.mmr) },
-					{ name: "deviation", label: "Deviation (optional)", type: "number", step: 1, min: 0, max: 350, value: "" },
+					{ name: "deviation", label: "Deviation (optional, 30–350)", type: "number", step: 1, min: 30, max: 350, value: "" },
 					{ name: "reason", label: "Reason", type: "textarea", required: true, maxlength: 500 }
 				],
 				validate: function (x) {
@@ -452,10 +452,17 @@
 		return ' <span class="' + (d >= 0 ? "res-Win" : "res-Loss") + '">' + (d >= 0 ? "+" : "−") + Math.abs(d) + "</span>";
 	}
 
+	// Map title from /config (GameServers:MapTitles), else the shortened uid.
+	function mapCell(uid) {
+		var title = uid && config.mapTitles ? config.mapTitles[uid] : null;
+		if (title) return '<td class="hide-sm" title="' + esc(uid) + '">' + esc(title) + "</td>";
+		return '<td class="hide-sm mono" title="' + esc(uid || "") + '">' + esc(uid ? String(uid).slice(0, 8) : "—") + "</td>";
+	}
+
 	function matchRow(m) {
 		var players = (m.players || []).map(function (p) {
 			var res = p.result && p.result !== "None" ? ' <span class="status-pill res-' + esc(p.result) + '">' + esc(p.result) + "</span>" : "";
-			return "<div>" + esc(p.name || String(p.userId || "").slice(0, 8)) + res + delta(p) + "</div>";
+			return "<div>" + esc(p.name || String(p.userId || "").slice(0, 8)) + res + (m.rated === false ? "" : delta(p)) + "</div>";
 		}).join("");
 		var canVoid = m.status !== "Void" && m.status !== "Cancelled";
 
@@ -466,7 +473,7 @@
 			+ (m.rated === false ? '<span class="badge">unrated</span>' : "")
 			+ (m.reason ? '<span class="sub">' + esc(m.reason) + "</span>" : "") + "</td>"
 			+ "<td>" + (players || '<span class="meta">—</span>') + "</td>"
-			+ '<td class="hide-sm mono" title="' + esc(m.mapUid) + '">' + esc(String(m.mapUid || "—").slice(0, 10)) + "</td>"
+			+ mapCell(m.mapUid)
 			+ '<td><div class="actions">' + (canVoid ? '<button class="btn small danger" data-act="void" data-id="' + esc(m.id) + '" type="button">Void</button>' : "") + "</div></td>"
 			+ "</tr>";
 	}

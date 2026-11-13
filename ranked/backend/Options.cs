@@ -69,4 +69,11 @@ public class GameServerOptions
 
 	// Map UIDs to pick from at random.
 	public string[] MapPool { get; set; } = Array.Empty<string>();
+
+	// Display names of maps (uid -> title) for the web pages and Discord posts. Unknown uids fall back to a short uid.
+	public Dictionary<string, string> MapTitles { get; set; } = new();
+
+	// Configured title of a map, or null.
+	public string? MapTitle(string? uid) =>
+		!string.IsNullOrEmpty(uid) && MapTitles.TryGetValue(uid, out var title) && !string.IsNullOrWhiteSpace(title) ? title.Trim() : null;
 }

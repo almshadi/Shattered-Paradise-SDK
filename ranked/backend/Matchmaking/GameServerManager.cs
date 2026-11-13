@@ -126,6 +126,34 @@ public class GameServerManager : IDisposable
 		log.LogInformation("Started game server for match {Match} on port {Port} (pid {Pid})", matchId, port, process.Id);
 	}
 
+	// Support dirs of game servers that were still running when the backend stopped (their exit handler never ran).
+	// Only dirs of matches known to this database are removed: another backend instance may share the SDK checkout.
+	public async Task DeleteStaleSupportDirs(RankedDb db)
+	{
+		var root = Path.Combine(sdkDir, "ranked", ".server-support");
+		if (!Directory.Exists(root))
+			return;
+
+		var ids = Directory.GetDirectories(root)
+			.Select(d => Guid.TryParseExact(Path.GetFileName(d), "N", out var id) ? id : Guid.Empty)
+			.Where(id => id != Guid.Empty && !running.ContainsKey(id)).ToList();
+		var known = await db.Matches.Where(m => ids.Contains(m.Id)).Select(m => m.Id).ToListAsync();
+		foreach (var id in known)
+		{
+			try
+			{
+				Directory.Delete(SupportDirFor(id), recursive: true);
+			}
+			catch (Exception e)
+			{
+				log.LogWarning(e, "Could not delete the stale support dir of match {Match}", id);
+			}
+		}
+
+		if (known.Count > 0)
+			log.LogInformation("Deleted {Count} stale game server support dir(s)", known.Count);
+	}
+
 	string SupportDirFor(Guid matchId) => Path.Combine(sdkDir, "ranked", ".server-support", matchId.ToString("N"));
 
 	// After the server process is gone: move its replay (if a game was played) into the replay store, link it to the
