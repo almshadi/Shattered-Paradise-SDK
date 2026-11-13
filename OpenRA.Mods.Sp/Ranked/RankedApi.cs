@@ -10,7 +10,9 @@
 #endregion
 
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -42,15 +44,15 @@ namespace OpenRA.Mods.Sp.Ranked
 		static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
 		// Lets one machine run two clients as different users: launch with SP_RANKED_PROFILE=2.
-		static string SessionFile
+		static string ProfileFile(string baseName)
 		{
-			get
-			{
-				var profile = Environment.GetEnvironmentVariable("SP_RANKED_PROFILE");
-				var name = string.IsNullOrEmpty(profile) ? "ranked-session.txt" : $"ranked-session-{profile}.txt";
-				return Path.Combine(Platform.SupportDir, name);
-			}
+			var profile = Environment.GetEnvironmentVariable("SP_RANKED_PROFILE");
+			var name = string.IsNullOrEmpty(profile) ? $"{baseName}.txt" : $"{baseName}-{profile}.txt";
+			return Path.Combine(Platform.SupportDir, name);
 		}
+
+		static string SessionFile => ProfileFile("ranked-session");
+		static string VetoesFile => ProfileFile("ranked-vetoes");
 
 		public static string Token { get; private set; }
 
@@ -90,6 +92,34 @@ namespace OpenRA.Mods.Sp.Ranked
 			catch (Exception e)
 			{
 				Log.Write("debug", $"[ranked] Could not write session: {e.Message}");
+			}
+		}
+
+		/// <summary>Map uids the player wants to ban, one per line. Empty if none were saved.</summary>
+		public static List<string> LoadVetoes()
+		{
+			try
+			{
+				if (File.Exists(VetoesFile))
+					return File.ReadAllLines(VetoesFile).Select(l => l.Trim()).Where(l => l.Length > 0).Distinct().ToList();
+			}
+			catch (Exception e)
+			{
+				Log.Write("debug", $"[ranked] Could not read map vetoes: {e.Message}");
+			}
+
+			return new List<string>();
+		}
+
+		public static void SaveVetoes(IEnumerable<string> uids)
+		{
+			try
+			{
+				File.WriteAllLines(VetoesFile, uids);
+			}
+			catch (Exception e)
+			{
+				Log.Write("debug", $"[ranked] Could not write map vetoes: {e.Message}");
 			}
 		}
 
