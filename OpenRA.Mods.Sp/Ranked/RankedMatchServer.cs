@@ -32,7 +32,7 @@ namespace OpenRA.Mods.Sp.Ranked
 	/// Inactive unless the backend launched this process (SP_RANKED_MATCH_ID is set), so normal servers are unaffected.
 	/// Responsibilities: only admit the two matched players, lock the lobby down, auto-start, and report the result.
 	/// </summary>
-	public class RankedMatchServer : ServerTrait, INotifyServerStart, IInterpretCommand, IStartGame, ITick, INotifyServerEmpty
+	public class RankedMatchServer : ServerTrait, INotifyServerStart, IInterpretCommand, IStartGame, ITick, INotifyServerEmpty, IEndGame
 	{
 		const string AuthCommand = "ranked-auth";
 
@@ -64,6 +64,7 @@ namespace OpenRA.Mods.Sp.Ranked
 
 		bool gameStarted;
 		bool finished;
+		bool gameEnded;
 		DateTime? startAt;
 		int lastAnnouncedSecond = -1;
 
@@ -117,7 +118,7 @@ namespace OpenRA.Mods.Sp.Ranked
 			if (expected.Count != 2)
 			{
 				Log.Write("server", "[ranked] Could not load match from backend, exiting.");
-				Environment.Exit(2);
+				Exit(server, 2);
 			}
 
 			Log.Write("server", $"[ranked] Expecting {string.Join(" vs ", expected.Select(p => p.Name))}");
@@ -398,7 +399,49 @@ namespace OpenRA.Mods.Sp.Ranked
 				Task.WaitAll(pendingReports.ToArray(), TimeSpan.FromSeconds(15));
 
 			Log.Write("server", "[ranked] Match over and server empty, exiting.");
-			Environment.Exit(0);
+			Exit(server, 0);
+		}
+
+		// Server.EndGame (normally run when the server loop shuts down) invokes this; remember it so we don't end twice.
+		public void GameEnded(S server)
+		{
+			gameEnded = true;
+		}
+
+		/// <summary>
+		/// Every process exit goes through here. The replay recorder only writes its metadata
+		/// (players, outcomes, end time) and closes the file in Server.EndGame, so a started game
+		/// must be ended before exiting or the stored replay is incomplete.
+		/// Called on the server thread (ServerStarted / DropClient -> ServerEmpty), which is the thread
+		/// that also feeds the recorder, so this does not race with frame recording.
+		/// </summary>
+		void Exit(S server, int code)
+		{
+			if (gameStarted && !gameEnded)
+			{
+				gameEnded = true;
+				try
+				{
+					server.EndGame();
+					Log.Write("server", "[ranked] Game ended, replay finalized.");
+				}
+				catch (Exception e)
+				{
+					Log.Write("server", $"[ranked] Ending the game failed: {e.Message}");
+				}
+			}
+
+			// Log writes are asynchronous; flush them so the last lines survive Environment.Exit.
+			try
+			{
+				Log.Dispose();
+			}
+			catch (Exception)
+			{
+				// Exiting anyway.
+			}
+
+			Environment.Exit(code);
 		}
 
 		void Finish(string endpoint, object body)
