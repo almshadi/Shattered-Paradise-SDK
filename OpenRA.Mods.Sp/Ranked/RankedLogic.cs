@@ -188,7 +188,10 @@ namespace OpenRA.Mods.Sp.Ranked
 			back.OnClick = () =>
 			{
 				if (state == State.Queued)
+				{
 					RankedApi.Delete("/queue", _ => { });
+					RankedPresence.Idle();
+				}
 
 				Close();
 				onExit();
@@ -453,7 +456,10 @@ namespace OpenRA.Mods.Sp.Ranked
 		void SetUpdateRequired(string required, string yours, string url)
 		{
 			if (state is State.Queued or State.MatchFound)
+			{
 				RankedApi.Delete("/queue", _ => { });
+				RankedPresence.Idle();
+			}
 
 			state = State.UpdateRequired;
 			requiredVersion = string.IsNullOrEmpty(required) ? "a different version" : required;
@@ -824,6 +830,7 @@ namespace OpenRA.Mods.Sp.Ranked
 				status = "Searching for an opponent...";
 				detail = "";
 				nextPollAt = Game.RunTime;
+				RankedPresence.Searching();
 			});
 		}
 
@@ -833,6 +840,7 @@ namespace OpenRA.Mods.Sp.Ranked
 			RankedApi.Delete("/queue", r =>
 			{
 				requestInFlight = false;
+				RankedPresence.Idle();
 				LoadProfile("Search cancelled.");
 			});
 		}
@@ -880,7 +888,10 @@ namespace OpenRA.Mods.Sp.Ranked
 
 					case "idle":
 						if (state is State.Queued or State.MatchFound)
+						{
+							RankedPresence.Idle();
 							LoadProfile("Removed from the queue (match cancelled or timed out).");
+						}
 						break;
 				}
 			});
