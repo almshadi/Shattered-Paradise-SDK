@@ -8,7 +8,7 @@ public static class ConfigEndpoints
 {
 	public static void Map(WebApplication app)
 	{
-		app.MapGet("/config", (HttpContext ctx, ModVersionReader versions, IOptions<RankedOptions> opt, IOptions<QueueOptions> queueOpt) =>
+		app.MapGet("/config", (HttpContext ctx, ModVersionReader versions, IOptions<RankedOptions> opt, IOptions<QueueOptions> queueOpt, IOptions<Notifications.DiscordOptions> discord) =>
 		{
 			var required = versions.Required;
 			return Results.Ok(new
@@ -17,6 +17,7 @@ public static class ConfigEndpoints
 				ratingUpdates = opt.Value.Matchmaking.RatingUpdates,
 				devLogin = opt.Value.Auth.DevLogin,
 				googleConfigured = !string.IsNullOrEmpty(opt.Value.Auth.GoogleClientId),
+				discordConfigured = discord.Value.LoginConfigured,
 				requiredClientVersion = required,
 				clientDownloadUrl = opt.Value.ClientDownloadUrl,
 				versionOk = ClientVersion.IsOk(required, ClientVersion.Of(ctx)),

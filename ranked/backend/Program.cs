@@ -4,6 +4,7 @@ using Ranked.Backend.Api;
 using Ranked.Backend.Auth;
 using Ranked.Backend.Data;
 using Ranked.Backend.Matchmaking;
+using Ranked.Backend.Notifications;
 using Ranked.Backend.Ratings;
 using Ranked.Backend.Replays;
 
@@ -42,6 +43,7 @@ builder.Services.AddSingleton<MapPicker>();
 builder.Services.AddSingleton<RatingService>();
 builder.Services.AddSingleton<Ranked.Backend.Ratings.ISeasonService, Ranked.Backend.Ratings.SeasonService>();
 builder.Services.AddSingleton<Ranked.Backend.Notifications.IRankedNotifier, Ranked.Backend.Notifications.NullRankedNotifier>();
+builder.AddDiscord(); // Ranked:Discord options; swaps in DiscordNotifier when a webhook URL is set
 builder.Services.AddSingleton<Matchmaker>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Matchmaker>());
 
@@ -80,8 +82,10 @@ using (var scope = app.Services.CreateScope())
 	}
 }
 
-app.MapGet("/", () => Results.Text("Shattered Paradise ranked backend"));
+app.UseDefaultFiles(); // "/" → wwwroot/index.html (public leaderboard); /admin.html = admin page
+app.UseStaticFiles();
 AuthEndpoints.Map(app);
+DiscordAuthEndpoints.Map(app);
 AccountEndpoints.Map(app);
 QueueEndpoints.Map(app);
 MatchEndpoints.Map(app);

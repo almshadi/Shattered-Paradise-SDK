@@ -53,7 +53,7 @@ public static class AuthEndpoints
 		var rating = app.Services.GetRequiredService<IOptions<Ratings.RatingOptions>>().Value;
 
 		// 1) Game client starts a login. Returns the URL to open in the browser and a poll secret.
-		g.MapPost("/login", async (RankedDb db, IOptions<RankedOptions> opt) =>
+		g.MapPost("/login", async (RankedDb db, IOptions<RankedOptions> opt, IOptions<Notifications.DiscordOptions> discord) =>
 		{
 			var o = opt.Value;
 			var pollSecret = Tokens.NewSecret();
@@ -73,6 +73,8 @@ public static class AuthEndpoints
 				pollSecret,
 				browserUrl = $"{o.PublicBaseUrl.TrimEnd('/')}/auth/google/start?login={attempt.Id}",
 				googleConfigured = !string.IsNullOrEmpty(o.Auth.GoogleClientId),
+				discordConfigured = discord.Value.LoginConfigured,
+				discordBrowserUrl = DiscordAuthEndpoints.StartUrl(o, attempt.Id),
 				devLogin = o.Auth.DevLogin
 			});
 		});
@@ -234,7 +236,7 @@ public static class AuthEndpoints
 
 	static string RedirectUri(RankedOptions o) => $"{o.PublicBaseUrl.TrimEnd('/')}/auth/google/callback";
 
-	static Task<string> IssueSession(RankedDb db, User user, RankedOptions o)
+	internal static Task<string> IssueSession(RankedDb db, User user, RankedOptions o)
 	{
 		var token = Tokens.NewSecret();
 		db.AuthSessions.Add(new AuthSession
@@ -257,7 +259,7 @@ public static class AuthEndpoints
 		return clean.Length == 0 ? "Player" : clean;
 	}
 
-	static IResult Page(string message, bool ok) => Results.Content($$"""
+	internal static IResult Page(string message, bool ok) => Results.Content($$"""
 		<!doctype html><html><head><meta charset="utf-8"><title>Shattered Paradise Ranked</title>
 		<style>body{font-family:system-ui,sans-serif;background:#111;color:#eee;display:grid;place-items:center;height:100vh;margin:0}
 		div{max-width:28rem;padding:2rem;border:1px solid {{(ok ? "#3a7" : "#a33")}};border-radius:8px;text-align:center}</style></head>

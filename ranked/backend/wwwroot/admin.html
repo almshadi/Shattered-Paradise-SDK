@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Admin — Shattered Paradise Ranked</title>
+	<meta name="robots" content="noindex, nofollow">
+	<meta name="theme-color" content="#07090b">
+	<link rel="icon" href="img/logo.svg" type="image/svg+xml">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap">
+	<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+	<header class="site-header">
+		<div class="wrap">
+			<a class="brand" href="./">
+				<img src="img/logo.svg" width="36" height="36" alt="">
+				<span class="brand-name">Shattered <span>Paradise</span><br>Ranked · Admin</span>
+			</a>
+			<span class="header-spacer"></span>
+			<span class="who hidden" id="who"><span>Signed in as <b id="who-name"></b></span><button class="btn small ghost" id="signout" type="button">Sign out</button></span>
+		</div>
+	</header>
+
+	<main class="wrap">
+		<!-- signed out -->
+		<div class="panel signin hidden" id="view-signin">
+			<h2>Admin sign-in</h2>
+			<p>Sign in with the account that has admin rights. A new tab opens for the sign-in; come back here afterwards.</p>
+			<button class="btn primary" id="signin-google" type="button">Sign in with Google</button>
+			<button class="btn hidden" id="signin-discord" type="button">Sign in with Discord</button>
+			<div class="hidden" id="dev-wrap" style="margin-top:18px;text-align:left">
+				<label class="field">Dev login (test servers only)
+					<input id="dev-name" placeholder="Player name" autocomplete="off" maxlength="16">
+				</label>
+				<button class="btn" id="signin-dev" type="button">Dev login</button>
+			</div>
+			<p class="meta" id="signin-status" aria-live="polite"></p>
+		</div>
+
+		<!-- signed in, but no access / no admin API -->
+		<div class="panel signin hidden" id="view-denied">
+			<h2 id="denied-title">No access</h2>
+			<p id="denied-text"></p>
+			<button class="btn" id="denied-signout" type="button">Sign out</button>
+		</div>
+
+		<!-- admin -->
+		<div class="hidden" id="view-admin">
+			<nav class="tabs" role="tablist">
+				<button class="tab" role="tab" data-tab="users" aria-selected="true" type="button">Users</button>
+				<button class="tab" role="tab" data-tab="matches" aria-selected="false" type="button">Matches</button>
+				<button class="tab" role="tab" data-tab="seasons" aria-selected="false" type="button">Seasons</button>
+				<button class="tab" role="tab" data-tab="audit" aria-selected="false" type="button">Audit log</button>
+			</nav>
+
+			<section class="panel" data-pane="users">
+				<form class="toolbar" id="users-form">
+					<input type="search" id="users-search" placeholder="Search name, e-mail or id…" autocomplete="off">
+					<select id="users-limit" aria-label="Limit"><option>50</option><option>100</option><option>200</option></select>
+					<button class="btn" type="submit">Search</button>
+				</form>
+				<div class="table-wrap">
+					<table class="admin">
+						<thead><tr><th>Player</th><th class="num">Rating</th><th class="num hide-sm">W / L</th><th>Status</th><th class="hide-sm">Seen</th><th class="num">Actions</th></tr></thead>
+						<tbody id="users-body"></tbody>
+					</table>
+				</div>
+				<div id="users-state"></div>
+			</section>
+
+			<section class="panel hidden" data-pane="matches">
+				<form class="toolbar" id="matches-form">
+					<select id="matches-status" aria-label="Status">
+						<option value="">All statuses</option>
+						<option>Starting</option>
+						<option>WaitingForPlayers</option>
+						<option>InProgress</option>
+						<option>Completed</option>
+						<option>Cancelled</option>
+						<option>Void</option>
+					</select>
+					<select id="matches-limit" aria-label="Limit"><option>50</option><option>100</option><option>200</option></select>
+					<button class="btn" type="submit">Refresh</button>
+				</form>
+				<div class="table-wrap">
+					<table class="admin">
+						<thead><tr><th>When</th><th>Status</th><th>Players</th><th class="hide-sm">Map</th><th class="num">Actions</th></tr></thead>
+						<tbody id="matches-body"></tbody>
+					</table>
+				</div>
+				<div id="matches-state"></div>
+			</section>
+
+			<section class="panel hidden" data-pane="seasons">
+				<div class="toolbar">
+					<button class="btn primary" id="season-start" type="button">Start new season</button>
+					<button class="btn danger" id="season-end" type="button">End active season</button>
+					<span class="grow"></span>
+					<button class="btn ghost" id="seasons-refresh" type="button">Refresh</button>
+				</div>
+				<div class="table-wrap">
+					<table class="admin">
+						<thead><tr><th>#</th><th>Name</th><th>Started</th><th>Ended</th><th>Status</th></tr></thead>
+						<tbody id="seasons-body"></tbody>
+					</table>
+				</div>
+				<div id="seasons-state"></div>
+			</section>
+
+			<section class="panel hidden" data-pane="audit">
+				<div class="toolbar">
+					<select id="audit-limit" aria-label="Limit"><option>100</option><option>250</option><option>500</option></select>
+					<button class="btn" id="audit-refresh" type="button">Refresh</button>
+				</div>
+				<div class="table-wrap">
+					<table class="admin">
+						<thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Target</th><th class="hide-sm">Details</th></tr></thead>
+						<tbody id="audit-body"></tbody>
+					</table>
+				</div>
+				<div id="audit-state"></div>
+			</section>
+		</div>
+	</main>
+
+	<dialog id="dlg"><form method="dialog" id="dlg-form"></form></dialog>
+	<div class="toast-host" id="toasts" aria-live="polite"></div>
+
+	<script src="js/common.js"></script>
+	<script src="js/admin.js"></script>
+</body>
+</html>
