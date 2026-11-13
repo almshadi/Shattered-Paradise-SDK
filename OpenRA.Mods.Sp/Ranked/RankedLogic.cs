@@ -11,6 +11,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using OpenRA.Graphics;
@@ -31,8 +32,15 @@ namespace OpenRA.Mods.Sp.Ranked
 		static string selectedFaction = "Random";
 		static Color? selectedColor;
 
+		// Map uids the player wants to ban; null until loaded from disk. May contain maps no longer in the pool.
+		static List<string> savedVetoes;
+
+		// Whether the RANKED_HISTORY_PANEL chrome template exists (null = not checked yet).
+		static bool? historyPanelExists;
+
 		const int QueuePollMs = 2000;
 		const int LoginPollMs = 2000;
+		const int StatsPollMs = 10000;
 
 		readonly Action onExit;
 		readonly Action onStart;
@@ -40,6 +48,7 @@ namespace OpenRA.Mods.Sp.Ranked
 		readonly TextFieldWidget devNameField;
 		readonly TextFieldWidget nicknameField;
 		readonly Dictionary<string, FactionInfo> factions;
+		readonly ModData modData;
 		bool renaming;
 
 		State state = State.Checking;
@@ -61,12 +70,36 @@ namespace OpenRA.Mods.Sp.Ranked
 		string yourVersion;
 		string downloadUrl;
 
+		bool rated = true;
+		bool discordAvailable;
+
+		// Map veto: the ranked map pool (sorted by title) and the bans that apply to it.
+		List<string> mapPool = new();
+		readonly Dictionary<string, string> mapTitles = new();
+		int maxVetoes;
+		List<string> vetoes = new();
+		string vetoesText = "";
+		DropDownButtonWidget vetoDropdown;
+
+		// Public queue stats line ("N players searching · M in game").
+		string queueStats = "";
+		bool statsInFlight;
+		long nextStatsAt;
+
+		// Queue cooldown (left a match before it started) and ranked bans, reported by POST /queue.
+		long cooldownEndsAt;
+		int cooldownShownSeconds = -1;
+		bool banned;
+		DateTime? banUntilUtc;
+		string banDetail;
+
 		[ObjectCreator.UseCtor]
 		public RankedLogic(Widget widget, ModData modData, WorldRenderer worldRenderer, Action onExit, Action onStart, Action reopen)
 		{
 			this.onExit = onExit;
 			this.onStart = onStart;
 			this.reopen = reopen;
+			this.modData = modData;
 
 			var worldInfo = modData.DefaultRules.Actors[SystemActors.World];
 			factions = worldInfo.TraitInfos<FactionInfo>().Where(f => f.Selectable).ToDictionary(f => f.InternalName);
@@ -83,6 +116,22 @@ namespace OpenRA.Mods.Sp.Ranked
 			var leaderboard = widget.Get<ButtonWidget>("LEADERBOARD_BUTTON");
 			leaderboard.IsVisible = () => state is State.Idle or State.LoggedOut or State.UpdateRequired;
 			leaderboard.OnClick = () => Ui.OpenWindow("RANKED_LEADERBOARD_PANEL", new WidgetArgs { { "onExit", (Action)(() => { }) } });
+
+			// The match history panel lives in its own chrome file; only offer it when that template is loaded.
+			historyPanelExists ??= HasWidgetTemplate(modData, "RANKED_HISTORY_PANEL");
+			var historyAvailable = historyPanelExists.Value;
+			var history = widget.Get<ButtonWidget>("HISTORY_BUTTON");
+			history.IsVisible = () => historyAvailable && state == State.Idle;
+			history.OnClick = () => Ui.OpenWindow("RANKED_HISTORY_PANEL", new WidgetArgs { { "onExit", (Action)(() => { }) } });
+
+			var discord = widget.Get<ButtonWidget>("DISCORD_BUTTON");
+			discord.IsVisible = () => state == State.LoggedOut && discordAvailable;
+			discord.IsDisabled = () => requestInFlight;
+			discord.OnClick = () => StartBrowserLogin(true);
+
+			var stats = widget.Get<LabelWidget>("QUEUE_STATS");
+			stats.IsVisible = () => state is State.Idle or State.Queued && queueStats.Length > 0;
+			stats.GetText = () => queueStats;
 
 			var rename = widget.Get<ButtonWidget>("RENAME_BUTTON");
 			rename.IsVisible = () => state == State.Idle;
@@ -118,7 +167,8 @@ namespace OpenRA.Mods.Sp.Ranked
 				State.UpdateRequired => "Download update",
 				_ => "Please wait..."
 			};
-			primary.IsDisabled = () => requestInFlight || state is State.Checking or State.MatchFound or State.Joining;
+			primary.IsDisabled = () => requestInFlight || state is State.Checking or State.MatchFound or State.Joining
+				|| (state == State.Idle && Blocked);
 			primary.OnClick = OnPrimary;
 
 			var secondary = widget.Get<ButtonWidget>("SECONDARY_BUTTON");
@@ -154,9 +204,14 @@ namespace OpenRA.Mods.Sp.Ranked
 				}
 
 				devLoginAvailable = r.Body.Bool("devLogin");
+				discordAvailable = r.Body.Bool("discordConfigured");
 				var mode = r.Body.Str("mode");
-				var rated = r.Body.Bool("ratingUpdates");
-				info = $"Queue: {mode?.ToUpperInvariant()}  |  Ratings: {(rated ? "ON" : "OFF (test mode)")}";
+				rated = r.Body.Bool("ratingUpdates");
+				info = rated
+					? $"Queue: {mode?.ToUpperInvariant()}  |  Ratings: ON"
+					: $"Queue: {mode?.ToUpperInvariant()}\nUNRATED TEST MODE – results don't affect ratings";
+
+				SetupMapPool(r.Body);
 
 				if (!r.Body.VersionOk())
 				{
@@ -173,6 +228,212 @@ namespace OpenRA.Mods.Sp.Ranked
 					SetLoggedOut("Not signed in", "Sign in to play ranked matches.");
 				else
 					LoadProfile();
+			});
+		}
+
+		bool Blocked => banned || cooldownEndsAt > 0;
+
+		static bool HasWidgetTemplate(ModData modData, string id)
+		{
+			try
+			{
+				foreach (var file in modData.Manifest.ChromeLayout)
+				{
+					using (var stream = modData.DefaultFileSystem.Open(file))
+					{
+						foreach (var node in MiniYaml.FromStream(stream, file))
+						{
+							var key = node.Key[(node.Key.IndexOf('@') + 1)..];
+							if (key == id)
+								return true;
+						}
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				Log.Write("debug", $"[ranked] Could not scan chrome layout for {id}: {e.Message}");
+			}
+
+			return false;
+		}
+
+		void SetupMapPool(JsonElement config)
+		{
+			maxVetoes = Math.Max(0, (int)(config.Num("maxMapVetoes") ?? 0));
+			var titles = config.Obj("mapTitles");
+			var pool = config.Obj("mapPool");
+			mapTitles.Clear();
+			if (pool.ValueKind == JsonValueKind.Array)
+			{
+				foreach (var e in pool.EnumerateArray())
+				{
+					if (e.ValueKind != JsonValueKind.String)
+						continue;
+
+					var uid = e.GetString();
+					if (string.IsNullOrEmpty(uid) || mapTitles.ContainsKey(uid))
+						continue;
+
+					// Prefer the locally installed map's title; fall back to the server's, then the uid.
+					string title = null;
+					try
+					{
+						var preview = modData.MapCache[uid];
+						if (preview.Status == MapStatus.Available)
+							title = preview.Title;
+					}
+					catch (Exception ex)
+					{
+						Log.Write("debug", $"[ranked] Map lookup failed for {uid}: {ex.Message}");
+					}
+
+					mapTitles[uid] = title ?? titles.Str(uid) ?? uid;
+				}
+			}
+
+			mapPool = mapTitles.Keys.OrderBy(uid => mapTitles[uid], StringComparer.OrdinalIgnoreCase).ToList();
+			savedVetoes ??= RankedApi.LoadVetoes();
+
+			// Keep the saved choice on disk as is (the pool may change back); only send what applies now.
+			vetoes = savedVetoes.Where(mapTitles.ContainsKey).Take(maxVetoes).ToList();
+			UpdateVetoesText();
+		}
+
+		void ToggleVeto(string uid)
+		{
+			if (!vetoes.Remove(uid))
+			{
+				if (vetoes.Count >= maxVetoes)
+					return;
+
+				vetoes.Add(uid);
+			}
+
+			savedVetoes = vetoes.ToList();
+			RankedApi.SaveVetoes(savedVetoes);
+			UpdateVetoesText();
+		}
+
+		void UpdateVetoesText()
+		{
+			var text = vetoes.Count == 0
+				? $"None (up to {maxVetoes})"
+				: string.Join(", ", vetoes.Select(uid => mapTitles[uid]));
+
+			if (vetoDropdown != null && Game.Renderer != null && Game.Renderer.Fonts.TryGetValue(vetoDropdown.Font, out var font))
+				text = WidgetUtils.TruncateText(text, vetoDropdown.Bounds.Width - 35, font);
+
+			vetoesText = text;
+		}
+
+		void ShowVetoPanel()
+		{
+			var substitutions = new Dictionary<string, int>() { { "DROPDOWN_WIDTH", vetoDropdown.Bounds.Width } };
+			var panel = (ScrollPanelWidget)Ui.LoadWidget("RANKED_MAP_VETO_PANEL", null, new WidgetArgs() { { "substitutions", substitutions } });
+			var template = panel.Get<CheckboxWidget>("MAP_TEMPLATE");
+			panel.RemoveChildren();
+
+			foreach (var uid in mapPool)
+			{
+				var title = mapTitles[uid];
+				var checkbox = (CheckboxWidget)template.Clone();
+				checkbox.GetText = () => title;
+				checkbox.IsChecked = () => vetoes.Contains(uid);
+				checkbox.IsDisabled = () => !vetoes.Contains(uid) && vetoes.Count >= maxVetoes;
+				checkbox.OnClick = () => ToggleVeto(uid);
+				panel.AddChild(checkbox);
+			}
+
+			panel.Bounds.Height = Math.Min(260, panel.ContentHeight);
+			vetoDropdown.RemovePanel();
+			vetoDropdown.AttachPanel(panel);
+		}
+
+		static DateTime? ParseUtc(string iso)
+		{
+			if (!string.IsNullOrEmpty(iso) && DateTime.TryParse(iso, CultureInfo.InvariantCulture,
+				DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var parsed))
+				return parsed;
+
+			return null;
+		}
+
+		void StartCooldown(int seconds)
+		{
+			cooldownEndsAt = Game.RunTime + Math.Max(1, seconds) * 1000L;
+			cooldownShownSeconds = -1;
+			UpdateBlockText();
+		}
+
+		// Server sends 409 { error: "banned", until: iso | null (permanent), reason }.
+		void SetBanned(ApiResult r)
+		{
+			banned = true;
+			var until = r.Body.Str("until");
+			banUntilUtc = ParseUtc(until);
+
+			string untilText;
+			if (banUntilUtc != null)
+				untilText = $"The ban ends {banUntilUtc.Value.ToLocalTime():yyyy-MM-dd HH:mm}.";
+			else if (!string.IsNullOrEmpty(until))
+				untilText = $"The ban ends {until}.";
+			else
+				untilText = "This ban is permanent.";
+
+			var reason = r.Body.Str("reason");
+			banDetail = (string.IsNullOrWhiteSpace(reason) ? "" : $"Reason: {reason}\n") + untilText;
+			UpdateBlockText();
+		}
+
+		/// <summary>Runs every tick while Idle and blocked: keeps the cooldown / ban text current and lifts expired blocks.</summary>
+		void UpdateBlockText()
+		{
+			if (banned)
+			{
+				if (banUntilUtc != null && DateTime.UtcNow >= banUntilUtc.Value)
+				{
+					banned = false;
+					LoadProfile();
+					return;
+				}
+
+				status = "You are banned from ranked";
+				detail = banDetail;
+				return;
+			}
+
+			if (cooldownEndsAt > 0)
+			{
+				var left = (int)Math.Ceiling((cooldownEndsAt - Game.RunTime) / 1000.0);
+				if (left <= 0)
+				{
+					cooldownEndsAt = 0;
+					LoadProfile();
+					return;
+				}
+
+				status = "Queue cooldown";
+				if (left != cooldownShownSeconds)
+				{
+					cooldownShownSeconds = left;
+					detail = $"You left a match before it started.\nYou can search again in {left / 60}:{left % 60:00}.";
+				}
+			}
+		}
+
+		void PollStats()
+		{
+			statsInFlight = true;
+			RankedApi.Get("/queue/stats", r =>
+			{
+				statsInFlight = false;
+				if (disposed || !r.Ok)
+					return;
+
+				var searching = (int)(r.Body.Num("searching") ?? 0);
+				var playing = (int)(r.Body.Num("playing") ?? 0);
+				queueStats = $"{searching} {(searching == 1 ? "player" : "players")} searching · {playing} in game";
 			});
 		}
 
@@ -266,13 +527,28 @@ namespace OpenRA.Mods.Sp.Ranked
 				var mmr = r.Body.Num("mmr") ?? 0;
 				var wins = r.Body.Num("wins") ?? 0;
 				var losses = r.Body.Num("losses") ?? 0;
+
+				// Older servers don't send "placed": treat everyone as placed there.
+				var placed = r.Body.Obj("placed").ValueKind != JsonValueKind.False;
+				var gamesLeft = (int)(r.Body.Num("placementGamesLeft") ?? 0);
+				var played = r.Body.Num("games") ?? (wins + losses);
+				var record = $"Wins {wins:0}   Losses {losses:0}";
+
 				state = State.Idle;
 				status = $"Signed in as {userName}";
-				detail = $"Rating {mmr:0}   Wins {wins:0}   Losses {losses:0}" + (extra != null ? "\n" + extra : "");
+				detail = (placed
+					? $"Rating {mmr:0}   {record}"
+					: $"Placement: {gamesLeft} of {played + gamesLeft:0} games left   {record}")
+					+ (extra != null ? "\n" + extra : "");
 
 				// A match may already be waiting (e.g. after a crash or reopening the panel).
 				PollQueue();
-				if (extra == null)
+				if (Blocked)
+				{
+					cooldownShownSeconds = -1;
+					UpdateBlockText();
+				}
+				else if (extra == null)
 					ShowLastResult();
 			});
 		}
@@ -281,7 +557,7 @@ namespace OpenRA.Mods.Sp.Ranked
 		{
 			RankedApi.Get("/matches/recent", r =>
 			{
-				if (disposed || !r.Ok || r.Body.ValueKind != JsonValueKind.Array || state != State.Idle)
+				if (disposed || !r.Ok || r.Body.ValueKind != JsonValueKind.Array || state != State.Idle || Blocked)
 					return;
 
 				var last = r.Body.EnumerateArray().FirstOrDefault();
@@ -294,6 +570,7 @@ namespace OpenRA.Mods.Sp.Ranked
 				var after = last.Num("mmrAfter");
 				var text = matchStatus switch
 				{
+					"Completed" when !rated => $"Last match: {(result == "Win" ? "Victory" : "Defeat")} (unrated)",
 					"Completed" when after != null && before != null =>
 						$"Last match: {(result == "Win" ? "Victory" : "Defeat")} ({after - before:+0;-0;0} rating)",
 					"Completed" => $"Last match: {result}",
@@ -314,7 +591,7 @@ namespace OpenRA.Mods.Sp.Ranked
 		{
 			switch (state)
 			{
-				case State.LoggedOut: StartGoogleLogin(); break;
+				case State.LoggedOut: StartBrowserLogin(false); break;
 				case State.NeedsNickname: SaveNickname(); break;
 				case State.WaitingForBrowser: RankedApi.OpenInBrowser(browserUrl); break;
 				case State.Idle: JoinQueue(); break;
@@ -394,6 +671,14 @@ namespace OpenRA.Mods.Sp.Ranked
 			widget.Get<LabelWidget>("FACTION_LABEL").IsVisible = PicksVisible;
 			widget.Get<LabelWidget>("COLOR_LABEL").IsVisible = PicksVisible;
 
+			bool VetoesVisible() => state == State.Idle && mapPool.Count > 0 && maxVetoes > 0;
+			widget.Get<LabelWidget>("MAP_BANS_LABEL").IsVisible = VetoesVisible;
+			vetoDropdown = widget.Get<DropDownButtonWidget>("MAP_BANS");
+			vetoDropdown.IsVisible = VetoesVisible;
+			vetoDropdown.IsDisabled = () => requestInFlight;
+			vetoDropdown.GetText = () => vetoesText;
+			vetoDropdown.OnMouseDown = _ => ShowVetoPanel();
+
 			var factionDropdown = widget.Get<DropDownButtonWidget>("FACTION");
 			factionDropdown.IsVisible = PicksVisible;
 			factionDropdown.IsDisabled = () => requestInFlight;
@@ -427,8 +712,10 @@ namespace OpenRA.Mods.Sp.Ranked
 				selectedFaction == "Random" ? null : selectedFaction, worldRenderer, c => selectedColor = c);
 		}
 
-		void StartGoogleLogin()
+		// Google and Discord share the same login session and polling: only the browser URL differs.
+		void StartBrowserLogin(bool discord)
 		{
+			var provider = discord ? "Discord" : "Google";
 			requestInFlight = true;
 			RankedApi.Post("/auth/login", null, r =>
 			{
@@ -439,18 +726,19 @@ namespace OpenRA.Mods.Sp.Ranked
 					return;
 				}
 
-				if (!r.Body.Bool("googleConfigured"))
+				var url = r.Body.Str(discord ? "discordBrowserUrl" : "browserUrl");
+				if (!r.Body.Bool(discord ? "discordConfigured" : "googleConfigured") || string.IsNullOrEmpty(url))
 				{
-					detail = "Google sign-in is not configured on the ranked server yet." + (devLoginAvailable ? " Use Dev login." : "");
+					detail = $"{provider} sign-in is not configured on the ranked server yet." + (devLoginAvailable ? " Use Dev login." : "");
 					return;
 				}
 
 				loginId = r.Body.Str("loginId");
 				pollSecret = r.Body.Str("pollSecret");
-				browserUrl = r.Body.Str("browserUrl");
+				browserUrl = url;
 				state = State.WaitingForBrowser;
 				status = "Continue in your browser";
-				detail = "Sign in with Google in the browser window that just opened.\nThis screen updates automatically.";
+				detail = $"Sign in with {provider} in the browser window that just opened.\nThis screen updates automatically.";
 				nextPollAt = Game.RunTime + LoginPollMs;
 				RankedApi.OpenInBrowser(browserUrl);
 			});
@@ -488,12 +776,34 @@ namespace OpenRA.Mods.Sp.Ranked
 		{
 			requestInFlight = true;
 			var color = selectedColor ?? Game.Settings.Player.Color;
-			RankedApi.Post("/queue", new { faction = selectedFaction, color = $"{color.R:X2}{color.G:X2}{color.B:X2}" }, r =>
+			var body = new { faction = selectedFaction, color = $"{color.R:X2}{color.G:X2}{color.B:X2}", vetoes = vetoes.ToArray() };
+			RankedApi.Post("/queue", body, r =>
 			{
 				requestInFlight = false;
+				if (disposed)
+					return;
+
 				if (r.Error == "version_mismatch")
 				{
 					SetUpdateRequired(r);
+					return;
+				}
+
+				// Server sends 409 { error: "queue_cooldown", until, seconds, dodges }.
+				if (r.Error == "queue_cooldown")
+				{
+					var seconds = r.Body.Num("seconds");
+					var until = ParseUtc(r.Body.Str("until"));
+					if (seconds == null && until != null)
+						seconds = (until.Value - DateTime.UtcNow).TotalSeconds;
+
+					StartCooldown((int)Math.Ceiling(seconds ?? 60));
+					return;
+				}
+
+				if (r.Error == "banned")
+				{
+					SetBanned(r);
 					return;
 				}
 
@@ -643,7 +953,19 @@ namespace OpenRA.Mods.Sp.Ranked
 
 		public override void Tick()
 		{
-			if (disposed || requestInFlight || pollInFlight || Game.RunTime < nextPollAt)
+			if (disposed)
+				return;
+
+			if (state == State.Idle && Blocked)
+				UpdateBlockText();
+
+			if (!statsInFlight && state is State.Idle or State.Queued && Game.RunTime >= nextStatsAt)
+			{
+				nextStatsAt = Game.RunTime + StatsPollMs;
+				PollStats();
+			}
+
+			if (requestInFlight || pollInFlight || Game.RunTime < nextPollAt)
 				return;
 
 			if (state == State.Queued || state == State.MatchFound)

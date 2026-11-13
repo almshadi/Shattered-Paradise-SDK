@@ -3,7 +3,7 @@ Background@RANKED_PANEL:
 	X: (WINDOW_WIDTH - WIDTH) / 2
 	Y: (WINDOW_HEIGHT - HEIGHT) / 2
 	Width: 520
-	Height: 330
+	Height: 400
 	Children:
 		Label@TITLE:
 			X: 0
@@ -15,55 +15,55 @@ Background@RANKED_PANEL:
 			Font: Bold
 		Label@STATUS:
 			X: 20
-			Y: 60
+			Y: 55
 			Width: PARENT_WIDTH - 40
 			Height: 25
 			Align: Center
 			Font: Bold
 		Label@DETAIL:
 			X: 20
-			Y: 88
+			Y: 82
 			Width: PARENT_WIDTH - 40
-			Height: 60
+			Height: 80
 			Align: Center
 			VAlign: Top
 			WordWrap: true
 		Label@DEV_NAME_LABEL:
 			X: 20
-			Y: 160
+			Y: 170
 			Width: 175
 			Height: 25
 			Align: Right
 			Text: label-ranked-dev-name
 		TextField@DEV_NAME:
 			X: 205
-			Y: 160
+			Y: 170
 			Width: 160
 			Height: 25
 			MaxLength: 16
 		Label@NICKNAME_LABEL:
 			X: 20
-			Y: 160
+			Y: 170
 			Width: 175
 			Height: 25
 			Align: Right
 			Text: label-ranked-nickname
 		TextField@NICKNAME:
 			X: 205
-			Y: 160
+			Y: 170
 			Width: 160
 			Height: 25
 			MaxLength: 16
 		Label@FACTION_LABEL:
-			X: 20
-			Y: 160
+			X: 50
+			Y: 170
 			Width: 70
 			Height: 25
 			Align: Right
 			Text: label-ranked-faction
 		DropDownButton@FACTION:
-			X: 100
-			Y: 160
+			X: 130
+			Y: 170
 			Width: 180
 			Height: 25
 			IgnoreChildMouseOver: true
@@ -78,15 +78,15 @@ Background@RANKED_PANEL:
 					Width: 120
 					Height: 25
 		Label@COLOR_LABEL:
-			X: 290
-			Y: 160
+			X: 320
+			Y: 170
 			Width: 60
 			Height: 25
 			Align: Right
 			Text: label-ranked-color
 		DropDownButton@COLOR:
-			X: 360
-			Y: 160
+			X: 390
+			Y: 170
 			Width: 80
 			Height: 25
 			IgnoreChildMouseOver: true
@@ -97,30 +97,62 @@ Background@RANKED_PANEL:
 					Y: 6
 					Width: PARENT_WIDTH - 35
 					Height: PARENT_HEIGHT - 12
+		Label@MAP_BANS_LABEL:
+			X: 50
+			Y: 205
+			Width: 70
+			Height: 25
+			Align: Right
+			Text: label-ranked-map-bans
+		DropDownButton@MAP_BANS:
+			X: 130
+			Y: 205
+			Width: 340
+			Height: 25
+			Align: Left
+		Button@DISCORD_BUTTON:
+			X: 20
+			Y: 240
+			Width: 150
+			Height: 25
+			Text: button-ranked-discord
 		Button@RENAME_BUTTON:
-			X: 100
-			Y: 195
-			Width: 180
+			X: 20
+			Y: 240
+			Width: 150
 			Height: 25
 			Text: button-ranked-rename
 		Button@LEADERBOARD_BUTTON:
-			X: 290
-			Y: 195
+			X: 185
+			Y: 240
 			Width: 150
 			Height: 25
 			Text: button-ranked-leaderboard
+		Button@HISTORY_BUTTON:
+			X: 350
+			Y: 240
+			Width: 150
+			Height: 25
+			Text: button-ranked-history
+		Label@QUEUE_STATS:
+			X: 20
+			Y: 278
+			Width: PARENT_WIDTH - 40
+			Height: 18
+			Align: Center
+			Font: Small
 		Label@INFO:
 			X: 20
-			Y: 235
+			Y: 300
 			Width: PARENT_WIDTH - 40
-			Height: 22
+			Height: 32
 			Align: Center
 			VAlign: Top
 			Font: Small
 			WordWrap: true
 		Label@VERSION:
 			X: 20
-			Y: 259
+			Y: 334
 			Width: PARENT_WIDTH - 40
 			Height: 16
 			Align: Center
@@ -147,3 +179,15 @@ Background@RANKED_PANEL:
 			Font: Bold
 			Key: escape
 		TooltipContainer@TOOLTIP_CONTAINER:
+
+ScrollPanel@RANKED_MAP_VETO_PANEL:
+	TopBottomSpacing: 5
+	ItemSpacing: 5
+	Width: DROPDOWN_WIDTH
+	Height: 100
+	Children:
+		Checkbox@MAP_TEMPLATE:
+			X: 5
+			Width: PARENT_WIDTH - 29
+			Height: 20
+			Font: Regular
