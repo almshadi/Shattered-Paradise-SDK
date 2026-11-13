@@ -1,5 +1,152 @@
-# Placeholder for the ranked match history panel (filled in by a later change).
-Container@RANKED_HISTORY_PLACEHOLDER:
-	Width: 0
-	Height: 0
-	Visible: false
+Background@RANKED_HISTORY_PANEL:
+	Logic: RankedHistoryLogic
+	X: (WINDOW_WIDTH - WIDTH) / 2
+	Y: (WINDOW_HEIGHT - HEIGHT) / 2
+	Width: 910
+	Height: 520
+	Children:
+		Label@TITLE:
+			X: 0
+			Y: 21
+			Width: PARENT_WIDTH
+			Height: 25
+			Text: label-ranked-history-title
+			Align: Center
+			Font: Bold
+		Container@HEADERS:
+			X: 20
+			Y: 55
+			Width: PARENT_WIDTH - 40
+			Height: 25
+			Children:
+				Label@DATE:
+					X: 5
+					Width: 110
+					Height: 25
+					Text: label-ranked-history-col-date
+					Font: Bold
+				Label@OPPONENT:
+					X: 120
+					Width: 140
+					Height: 25
+					Text: label-ranked-history-col-opponent
+					Font: Bold
+				Label@MAP:
+					X: 265
+					Width: 165
+					Height: 25
+					Text: label-ranked-history-col-map
+					Font: Bold
+				Label@FACTIONS:
+					X: 435
+					Width: 150
+					Height: 25
+					Text: label-ranked-history-col-factions
+					Font: Bold
+				Label@RESULT:
+					X: 590
+					Width: 110
+					Height: 25
+					Text: label-ranked-history-col-result
+					Font: Bold
+				Label@RATING:
+					X: 705
+					Width: 70
+					Height: 25
+					Text: label-ranked-history-col-rating
+					Align: Right
+					Font: Bold
+				Label@DURATION:
+					X: 780
+					Width: 60
+					Height: 25
+					Text: label-ranked-history-col-duration
+					Align: Right
+					Font: Bold
+		ScrollPanel@LIST:
+			X: 20
+			Y: 82
+			Width: PARENT_WIDTH - 40
+			Height: PARENT_HEIGHT - 175
+			TopBottomSpacing: 2
+			Children:
+				ScrollItem@TEMPLATE:
+					X: 2
+					Width: PARENT_WIDTH - 27
+					Height: 25
+					Visible: false
+					Children:
+						Label@DATE:
+							X: 3
+							Width: 110
+							Height: 25
+						Label@OPPONENT:
+							X: 118
+							Width: 140
+							Height: 25
+						Label@MAP:
+							X: 263
+							Width: 165
+							Height: 25
+						Label@FACTIONS:
+							X: 433
+							Width: 150
+							Height: 25
+						LabelWithTooltip@RESULT:
+							X: 588
+							Width: 110
+							Height: 25
+							TooltipContainer: TOOLTIP_CONTAINER
+							TooltipTemplate: SIMPLE_TOOLTIP
+						Label@RATING:
+							X: 703
+							Width: 70
+							Height: 25
+							Align: Right
+						Label@DURATION:
+							X: 778
+							Width: 60
+							Height: 25
+							Align: Right
+		Label@STATUS:
+			X: 20
+			Y: 82
+			Width: PARENT_WIDTH - 40
+			Height: PARENT_HEIGHT - 175
+			Align: Center
+		Label@INFO:
+			X: 20
+			Y: PARENT_HEIGHT - 85
+			Width: PARENT_WIDTH - 40
+			Height: 25
+			Align: Center
+		Button@REFRESH_BUTTON:
+			X: 20
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Text: button-ranked-refresh
+			Font: Bold
+		Button@LOAD_MORE_BUTTON:
+			X: 170
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Text: button-ranked-history-load-more
+			Font: Bold
+		Button@DOWNLOAD_BUTTON:
+			X: 320
+			Y: PARENT_HEIGHT - 45
+			Width: 180
+			Height: 25
+			Text: button-ranked-history-download
+			Font: Bold
+		Button@BACK_BUTTON:
+			X: PARENT_WIDTH - 160
+			Y: PARENT_HEIGHT - 45
+			Width: 140
+			Height: 25
+			Text: button-back
+			Font: Bold
+			Key: escape
+		TooltipContainer@TOOLTIP_CONTAINER:
