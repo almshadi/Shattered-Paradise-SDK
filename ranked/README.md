@@ -125,3 +125,34 @@ ranked/release.sh ranked-0.1.0             # same + commit "Release ...", tag, p
 - Output: `dist/ShatteredParadise-<version>-win64.zip` with a `ShatteredParadise-<version>/` folder: the game tree plus `play.cmd` and `README.txt` from `ranked/launcher/` (the player needs the .NET 6 Desktop Runtime; `play.cmd` checks for it).
 - With the GitHub CLI (`gh`) installed the release is created automatically; otherwise the script prints the manual upload steps (https://github.com/almshadi/Shattered-Paradise-sdk/releases/new).
 - Both players' clients and the game servers must run the same version.
+
+## Web pages & Discord
+
+| URL | What |
+|---|---|
+| `/` | Public page: live queue stats (`/queue/stats`, refreshed every 15 s), season selector + leaderboard (`/seasons`, `/leaderboard?season=`), download button and required version (`/config`), "How to play ranked". |
+| `/admin.html` | Admin page. Sign in with Google (or Discord, or dev login when enabled), then access is checked with `/admin/me`. Tabs: Users (search, ban/unban, set rating, admin on/off), Matches (filter, void), Seasons (start/end), Audit log. The token is kept in the browser's `localStorage`; *Sign out* revokes it. |
+
+The pages are static files in `backend/wwwroot/` (plain HTML/CSS/JS, no build step). `dotnet publish` and the Docker image include them automatically.
+
+### Discord options (`Ranked__Discord__*`)
+
+| Setting | Default | Effect |
+|---|---|---|
+| `WebhookUrl` | empty | Channel webhook for announcements. Empty = no Discord posts. |
+| `PostQueueJoins` | `true` | Post "Alice is looking for a ranked match (2 searching)". At most one post per player every `QueueJoinThrottleMinutes` (default 10). |
+| `PostMatchResults` | `true` | Post "Alice defeated Bob on `<map>` · +16 / −16 · GDI vs Nod" when a match completes. |
+| `Username`, `AvatarUrl` | "Shattered Paradise Ranked", empty | Name/avatar shown on the webhook posts. |
+| `ClientId`, `ClientSecret` | empty | Discord OAuth app for the optional *Sign in with Discord*. Without them, `/auth/discord/*` shows "Discord sign-in is not configured". |
+
+Posts run in the background. If Discord is down or the webhook is wrong, this only shows up as a warning in the backend log; matchmaking is unaffected.
+
+**Create the webhook:** Discord → Server Settings → Integrations → Webhooks → *New Webhook* → pick the channel → *Copy Webhook URL* → `Ranked__Discord__WebhookUrl=<url>` in `.env`. Treat the URL as a secret.
+
+**Discord sign-in:**
+1. https://discord.com/developers/applications → *New Application* (e.g. "SP Ranked").
+2. **OAuth2** → copy the *Client ID*, reset/copy the *Client Secret*.
+3. **OAuth2 → Redirects**: add `https://<host>/auth/discord/callback` (and `http://localhost:8090/auth/discord/callback` for local testing). The redirect is built from `Ranked__PublicBaseUrl`.
+4. Set `Ranked__Discord__ClientId` and `Ranked__Discord__ClientSecret`, then restart.
+
+Only the `identify` scope is requested, and only the Discord account id is stored (`Users.DiscordId`). As with Google, new players choose a nickname after their first login. `POST /auth/login` returns `discordConfigured` and `discordBrowserUrl` (open that instead of `browserUrl`), and the client keeps polling `/auth/login/{id}/poll` the same way. `/config` also reports `discordConfigured`.
