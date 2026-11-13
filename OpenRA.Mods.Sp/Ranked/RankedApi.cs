@@ -159,5 +159,58 @@ namespace OpenRA.Mods.Sp.Ranked
 
 		public static JsonElement Obj(this JsonElement e, string name) =>
 			e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) ? v : default;
+
+		// Binary downloads (match replays). Separate client: replays can take longer than the 10s API timeout.
+		static readonly HttpClient DownloadHttp = new() { Timeout = TimeSpan.FromMinutes(2) };
+
+		/// <summary>
+		/// GETs raw bytes. The callback (game thread) gets the result, the body on success
+		/// and the server-suggested file name from Content-Disposition (may be null).
+		/// </summary>
+		public static void Download(string path, Action<ApiResult, byte[], string> done)
+		{
+			var url = BaseUrl + path;
+			var token = Token;
+			Task.Run(async () =>
+			{
+				var result = new ApiResult();
+				byte[] data = null;
+				string fileName = null;
+				try
+				{
+					var req = new HttpRequestMessage(HttpMethod.Get, url);
+					if (token != null)
+						req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+					req.Headers.Add("X-Client-Version", ClientVersion);
+					var res = await DownloadHttp.SendAsync(req);
+					result.Status = (int)res.StatusCode;
+					result.Ok = res.IsSuccessStatusCode;
+					if (result.Ok)
+					{
+						data = await res.Content.ReadAsByteArrayAsync();
+						var cd = res.Content.Headers.ContentDisposition;
+						fileName = (cd?.FileNameStar ?? cd?.FileName)?.Trim('"');
+					}
+					else
+					{
+						var text = (await res.Content.ReadAsStringAsync()).TrimStart();
+						if (text.StartsWith("{", StringComparison.Ordinal))
+							result.Body = JsonDocument.Parse(text).RootElement.Clone();
+
+						result.Error = result.Body.ValueKind == JsonValueKind.Object && result.Body.TryGetProperty("error", out var e)
+							? e.GetString()
+							: $"HTTP {result.Status}";
+					}
+				}
+				catch (Exception e)
+				{
+					result.Ok = false;
+					result.Error = $"Cannot reach ranked server ({e.GetType().Name})";
+				}
+
+				Game.RunAfterTick(() => done(result, data, fileName));
+			});
+		}
 	}
 }
