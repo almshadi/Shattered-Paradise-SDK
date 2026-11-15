@@ -124,7 +124,7 @@ STAGE="$WORK/$NAME"
 mkdir -p "$STAGE"
 rsync -a \
 	--exclude '/.git' --exclude '/.github' --exclude '/.vscode' \
-	--exclude '/ranked/' --exclude '/dist/' --exclude '/support/' --exclude '/workspace/' \
+	--exclude '/ranked/' --exclude '/dist/' --exclude '/support/' --exclude '/workspace/' --exclude '/.claude/' \
 	--exclude 'engine/OpenRA.*/obj' --exclude 'OpenRA.Mods.Sp/obj' \
 	--exclude '*.log' --exclude '/next-step.txt' --exclude '/user.config' --exclude '/win.sh' \
 	"$ROOT/" "$STAGE/"
