@@ -1,5 +1,5 @@
 Container@MAINMENU:
-	Logic: MainMenuLogic
+	Logic: MainMenuLogic, SpGraphicsDefaultsLogic
 	Children:
 		LogicKeyListener@GLOBAL_KEYHANDLER:
 			Logic: MusicHotkeyLogic, ScreenshotHotkeyLogic, MuteHotkeyLogic
