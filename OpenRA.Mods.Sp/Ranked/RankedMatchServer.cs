@@ -46,7 +46,9 @@ namespace OpenRA.Mods.Sp.Ranked
 		// Grace periods.
 		static readonly TimeSpan UnauthenticatedKickAfter = TimeSpan.FromSeconds(20);
 		static readonly TimeSpan LobbyLeaveAbortAfter = TimeSpan.FromSeconds(60);
-		static readonly TimeSpan ForfeitAfterDisconnect = TimeSpan.FromSeconds(30);
+		// Leaving a running game is a loss: OpenRA can't rejoin a started game, so there is nothing to wait for.
+		// The short settle time only lets a surrender/defeat sent right before quitting arrive first.
+		static readonly TimeSpan ForfeitSettle = TimeSpan.FromSeconds(3);
 
 		static readonly FieldInfo GameInfoField = typeof(S).GetField("gameInfo", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -59,6 +61,9 @@ namespace OpenRA.Mods.Sp.Ranked
 		readonly Dictionary<int, ExpectedPlayer> clientToPlayer = new();
 		readonly Dictionary<Connection, DateTime> unauthenticatedSince = new();
 		readonly Dictionary<string, DateTime> missingSince = new();
+
+		// When each player was first seen gone from a running game (Tick granularity: 0.5 s).
+		readonly Dictionary<string, DateTime> leftGameAt = new();
 		readonly List<Task> pendingReports = new();
 		readonly Stopwatch tickTimer = Stopwatch.StartNew();
 
@@ -357,9 +362,30 @@ namespace OpenRA.Mods.Sp.Ranked
 				return;
 			}
 
-			// Disconnects: if one player stays connected and the other is gone for a while, the stayer wins.
+			// Leavers: record when each player was first seen gone.
 			var connectedIndexes = ConnectedClientIndexes(server).ToHashSet();
+			foreach (var p in players)
+			{
+				if (!connectedIndexes.Contains(p.Info.ClientIndex) && !leftGameAt.ContainsKey(p.Ranked.UserId))
+				{
+					leftGameAt[p.Ranked.UserId] = now;
+					Log.Write("server", $"[ranked] {p.Ranked.Name} left the game.");
+				}
+			}
+
 			var stillHere = players.Where(p => connectedIndexes.Contains(p.Info.ClientIndex)).ToList();
+			if (stillHere.Count == 0 && players.Count == 2)
+			{
+				// Both gone: whoever left first loses. Same observation (within 0.5 s, e.g. a crash) = no result.
+				var ordered = players.OrderBy(p => leftGameAt[p.Ranked.UserId]).ToList();
+				if (leftGameAt[ordered[0].Ranked.UserId] < leftGameAt[ordered[1].Ranked.UserId])
+					Finish("result", new { winnerUserId = ordered[1].Ranked.UserId, reason = "opponent_left_first" });
+				else
+					Finish("abort", new { reason = "all_players_disconnected" });
+
+				return;
+			}
+
 			if (stillHere.Count == 0)
 			{
 				Finish("abort", new { reason = "all_players_disconnected" });
@@ -369,15 +395,10 @@ namespace OpenRA.Mods.Sp.Ranked
 			if (stillHere.Count == 1 && players.Count == 2)
 			{
 				var gone = players.First(p => p.Ranked != stillHere[0].Ranked).Ranked;
-				if (!missingSince.TryGetValue(gone.UserId, out var since))
+				if (now - leftGameAt[gone.UserId] >= ForfeitSettle)
 				{
-					missingSince[gone.UserId] = now;
-					server.SendMessage($"{gone.Name} disconnected. They forfeit in {ForfeitAfterDisconnect.TotalSeconds:0} seconds unless the game ends first.");
-				}
-				else if (now - since > ForfeitAfterDisconnect)
-				{
-					server.SendMessage($"{gone.Name} forfeited by disconnecting. {stillHere[0].Ranked.Name} wins.");
-					Finish("result", new { winnerUserId = stillHere[0].Ranked.UserId, reason = "opponent_disconnected" });
+					server.SendMessage($"{gone.Name} left the game. {stillHere[0].Ranked.Name} wins.");
+					Finish("result", new { winnerUserId = stillHere[0].Ranked.UserId, reason = "opponent_left" });
 				}
 			}
 		}
@@ -389,6 +410,10 @@ namespace OpenRA.Mods.Sp.Ranked
 		{
 			if (!Active)
 				return;
+
+			// The last player just left: decide by game state first, then by who left first.
+			if (!finished && gameStarted)
+				CheckOutcome(server, DateTime.UtcNow);
 
 			if (!finished)
 				Finish("abort", new { reason = gameStarted ? "all_players_disconnected" : "all_players_left_lobby" });

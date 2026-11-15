@@ -63,8 +63,8 @@ Login flow: the game asks the backend to start a login → opens the browser →
 3. The server compares the ticket against the backend's hash. Unknown connections are kicked after 20s.
    Players can only change their own faction/color/spawn and toggle Ready; map, options, slots, teams and kicks are locked.
 4. Both players joined → the game starts automatically after ~10 s (factions/colours were chosen in the Ranked panel before queueing). The server records the result from the game state that both clients must agree on, so a player can't fake a win.
-   - Opponent disconnects for 30s → the remaining player wins.
-   - Both disconnect → the match is voided.
+   - Leaving a running game is a loss: if one player leaves, the other wins after a 3 s settle time (lets a surrender sent right before quitting count as such). OpenRA can't rejoin a started game, so there is no longer grace period.
+   - Both leave → whoever left first loses (reason `opponent_left_first`). Only if both vanish within the same 0.5 s check (e.g. a crash) is the match voided.
    - Desync → no result, and the match is voided when the players leave.
 5. The server reports the result → the backend updates ratings (if enabled) → the server exits once both players have left.
 
